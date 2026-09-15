@@ -130,18 +130,31 @@ async function handleInvoke() {
   const result = await vuaRegistry.invoke({
     adapterId,
     action,
-    target: { system: true },
+    target: { system: true, ...payload },
     payload,
   });
 
-  console.log(`\n✅ Execução Concluída com Sucesso!`);
-  console.log(`   • Status: ${result.success ? 'OK' : 'FAIL'}`);
-  console.log(`   • Prova Ed25519: ${result.execution_proof ? 'Gerada e Assinada' : 'N/A'}`);
-  console.log(`   • Input Hash   : ${result.execution_proof?.input_hash?.substring(0, 24)}...`);
-  console.log(`   • Output Hash  : ${result.execution_proof?.output_hash?.substring(0, 24)}...`);
-  console.log(`   • Verificação  : ${result.verification?.valid ? '✅ 100% VÁLIDA (Ed25519)' : '❌ INVÁLIDA'}`);
-  console.log(`\nDados de Saída:`);
-  console.log(JSON.stringify(result.data, null, 2));
+  if (result.success) {
+    console.log(`\n✅ Execução Concluída com Sucesso!`);
+    console.log(`   • Status: OK`);
+    console.log(`   • Prova Ed25519: ${result.execution_proof ? 'Gerada e Assinada' : 'N/A'}`);
+    console.log(`   • Input Hash   : ${result.execution_proof?.input_hash?.substring(0, 24)}...`);
+    console.log(`   • Output Hash  : ${result.execution_proof?.output_hash?.substring(0, 24)}...`);
+    console.log(`   • Verificação  : ${result.verification?.valid ? '✅ 100% VÁLIDA (Ed25519)' : '❌ INVÁLIDA'}`);
+    console.log(`\nDados de Saída:`);
+    console.log(JSON.stringify(result.data, null, 2));
+  } else {
+    const errCode = result.error?.code || result.data?.error?.code || 'FAIL_CLOSED';
+    const errMsg = result.error?.message || result.data?.error?.message || 'Falha na verificação externa';
+    console.log(`\n🛑 Execução Bloqueada / Falha Externa (Zero-Trust Fail-Closed):`);
+    console.log(`   • Status: FAIL (${errCode})`);
+    console.log(`   • Motivo: ${errMsg}`);
+    console.log(`   • Prova de Falha: ${result.execution_proof ? 'Gerada e Assinada (Audit-Trail)' : 'N/A'}`);
+    console.log(`   • Verificação  : ${result.verification?.valid ? '✅ VÁLIDA (Ed25519 - Prova de Falha Registrada)' : '❌ INVÁLIDA'}`);
+    console.log(`\nDados de Saída:`);
+    console.log(JSON.stringify(result.data, null, 2));
+    process.exit(1);
+  }
 }
 
 async function handleBench() {

@@ -541,18 +541,37 @@ export async function runVUAAdaptersE2ESuite(): Promise<{
   const { vuaRegistry } = await import('./adapters/registry.js');
   const results: any[] = [];
 
-  // 1. GitHub Adapter: inspect_repo
+  // 1. GitHub Adapter: inspect_repo (real verified repository)
   {
     const t0 = Date.now();
     const res = await vuaRegistry.invoke({
       adapterId: 'github',
       action: 'inspect_repo',
-      target: { owner: 'vortex-foundation', repo: 'vua-connector' },
+      target: { owner: 'scoobiii', repo: 'vua', branch: 'main' },
     });
     results.push({
       adapter: 'github',
       action: 'inspect_repo',
       passed: res.success && res.verification?.valid === true,
+      duration_ms: Date.now() - t0,
+      proof_verified: res.verification?.valid === true,
+      output: res.data,
+    });
+  }
+
+  // 1b. GitHub Adapter: fail-closed validation on non-existent repository
+  {
+    const t0 = Date.now();
+    const res = await vuaRegistry.invoke({
+      adapterId: 'github',
+      action: 'inspect_repo',
+      target: { owner: 'vortex-foundation', repo: 'non-existent-repository-test-fail-closed' },
+    });
+    const failedClosed = res.success === false && (res.data as any)?.error?.code === 'GITHUB_NOT_FOUND';
+    results.push({
+      adapter: 'github',
+      action: 'inspect_repo:fail_closed',
+      passed: failedClosed && res.verification?.valid === true,
       duration_ms: Date.now() - t0,
       proof_verified: res.verification?.valid === true,
       output: res.data,

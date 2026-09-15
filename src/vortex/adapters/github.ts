@@ -114,13 +114,13 @@ export class VUAGitHubAdapter implements IVUAAdapter {
     supportedActions: [
       {
         action: 'inspect_repo',
-        description: 'Inspect repository metadata, default branch, branch protections, and security policies.',
-        defaultParams: { owner: 'vortex-foundation', repo: 'vua-connector' },
+        description: 'Inspect repository metadata, default branch, branch protections, and security policies via GitHub REST API.',
+        defaultParams: { owner: 'scoobiii', repo: 'vua', branch: 'main' },
       },
       {
         action: 'verify_commit',
-        description: 'Cryptographically verify Git commit signature (PGP / SSH / Ed25519) and compute SHA-256 tree hash.',
-        defaultParams: { commit_sha: '856920785b8392b036211cc851e1f6467961ff52' },
+        description: 'Cryptographically verify Git commit signature (PGP / SSH / Ed25519) and compute SHA-256 tree hash via GitHub REST API.',
+        defaultParams: { owner: 'scoobiii', repo: 'vua', commit_sha: 'df7960eb0e3511188563b825d4426baaae0ebbef' },
       },
       {
         action: 'propose_pr',
@@ -216,54 +216,334 @@ export class VUAGitHubAdapter implements IVUAAdapter {
     auditLog.push(`[GITHUB-VUA] Initiating governed VCS action: ${action}`);
 
     if (action === 'inspect_repo') {
-      const owner = (target.owner || payload.owner || 'vortex-foundation') as string;
-      const repo = (target.repo || payload.repo || 'vua-connector') as string;
-      auditLog.push(`[GITHUB-VUA] Inspecting repository ${owner}/${repo}`);
-      auditLog.push(`[GITHUB-VUA] Checking branch protection rules on 'main'`);
+      const owner = (target.owner || payload.owner || 'scoobiii') as string;
+      const repo = (target.repo || payload.repo || 'vua') as string;
+      const branch = (target.branch || payload.branch || 'main') as string;
+      auditLog.push(`[GITHUB-VUA] Querying GitHub REST API for repository ${owner}/${repo}`);
 
-      return {
-        data: {
-          repository: `${owner}/${repo}`,
-          default_branch: 'main',
-          visibility: 'public',
-          branch_protection: {
-            required_status_checks: ['Vortex Unified Conformance & Quality Gates (100%)', 'GOS3 Contract Header Audit'],
-            enforce_admins: true,
-            required_pull_request_reviews: {
-              dismiss_stale_reviews: true,
-              require_code_owner_reviews: true,
-              required_approving_review_count: 1,
-            },
-            require_linear_history: true,
-            allow_force_pushes: false,
-            allow_deletions: false,
-          },
-          open_issues_count: 0,
-          vortex_governed: true,
-        },
-        auditLog,
+      const token = (process.env.GITHUB_TOKEN || payload.token) as string | undefined;
+      const headers: Record<string, string> = {
+        Accept: 'application/vnd.github+json',
+        'User-Agent': 'VUA-Connector-Governance/3.0',
       };
+      if (token) {
+        headers['Authorization'] = `Bearer ${token.trim()}`;
+      }
+
+      // Offline test fixture support only when explicitly requested
+      if (payload.offline_fixture === true) {
+        auditLog.push(`[GITHUB-VUA] ℹ️ Using explicit offline sandbox fixture`);
+        return {
+          data: {
+            success: true,
+            authenticated: Boolean(token),
+            external_effect: 'local_only',
+            repository: `${owner}/${repo}`,
+            default_branch: branch,
+            visibility: 'public',
+            branch_protection: {
+              status: 'FIXTURE_SANDBOX',
+              enforced: false,
+              reason: 'Explicit offline test fixture requested',
+            },
+            open_issues_count: 0,
+            vortex_governed: true,
+          },
+          auditLog,
+        };
+      }
+
+      try {
+        let effectiveToken = token;
+        let repoRes = await fetch(`https://api.github.com/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}`, {
+          headers,
+          signal: AbortSignal.timeout(10_000),
+        });
+
+        if (repoRes.status === 401 && token) {
+          auditLog.push(`[GITHUB-VUA] ⚠️ Configured token returned HTTP 401 (Bad credentials). Falling back to unauthenticated public read...`);
+          effectiveToken = undefined;
+          repoRes = await fetch(`https://api.github.com/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}`, {
+            headers: {
+              Accept: 'application/vnd.github+json',
+              'User-Agent': 'VUA-Connector-Governance/3.0',
+            },
+            signal: AbortSignal.timeout(10_000),
+          });
+        }
+
+        if (repoRes.status === 404) {
+          auditLog.push(`[GITHUB-VUA] 🛑 GITHUB_NOT_FOUND: Repository '${owner}/${repo}' does not exist or is inaccessible (HTTP 404). Fail closed.`);
+          return {
+            data: {
+              success: false,
+              authenticated: Boolean(effectiveToken),
+              external_effect: 'none',
+              execution_kind: 'capability',
+              provider: 'github',
+              error: {
+                code: 'GITHUB_NOT_FOUND',
+                message: `Repository '${owner}/${repo}' does not exist or is inaccessible on GitHub (HTTP 404)`,
+              },
+            },
+            auditLog,
+          };
+        }
+
+        if (!repoRes.ok) {
+          const errText = await repoRes.text();
+          const errCode = repoRes.status === 401 ? 'CREDENTIAL_INVALID' : repoRes.status === 403 ? 'GITHUB_RATE_LIMITED' : 'GITHUB_API_ERROR';
+          auditLog.push(`[GITHUB-VUA] 🛑 ${errCode}: HTTP ${repoRes.status} from GitHub API. Fail closed.`);
+          return {
+            data: {
+              success: false,
+              authenticated: Boolean(effectiveToken),
+              external_effect: 'none',
+              execution_kind: 'capability',
+              provider: 'github',
+              error: {
+                code: errCode,
+                message: `GitHub API error (${repoRes.status}): ${errText.slice(0, 200)}`,
+              },
+            },
+            auditLog,
+          };
+        }
+
+        const repoData = (await repoRes.json()) as any;
+        auditLog.push(`[GITHUB-VUA] ✅ Remote repository verified: ${repoData.full_name} (ID: ${repoData.id})`);
+
+        // Check real branch protection if token has permissions
+        let branchProtection: Record<string, unknown> = {
+          enforced: false,
+          status: 'UNINSPECTED',
+          reason: effectiveToken ? 'Inspection requires repository admin permissions' : 'Unauthenticated inspection cannot query branch protection',
+        };
+
+        if (effectiveToken) {
+          try {
+            const bpRes = await fetch(`https://api.github.com/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/branches/${encodeURIComponent(branch)}/protection`, {
+              headers,
+              signal: AbortSignal.timeout(5_000),
+            });
+            if (bpRes.ok) {
+              const bpData = (await bpRes.json()) as any;
+              branchProtection = {
+                enforced: true,
+                status: 'ENFORCED',
+                required_status_checks: bpData.required_status_checks?.contexts || [],
+                enforce_admins: bpData.enforce_admins?.enabled || false,
+                required_pull_request_reviews: bpData.required_pull_request_reviews ? {
+                  dismiss_stale_reviews: bpData.required_pull_request_reviews.dismiss_stale_reviews,
+                  require_code_owner_reviews: bpData.required_pull_request_reviews.require_code_owner_reviews,
+                  required_approving_review_count: bpData.required_pull_request_reviews.required_approving_review_count,
+                } : null,
+              };
+              auditLog.push(`[GITHUB-VUA] ✅ Branch protection verified for branch '${branch}'`);
+            } else if (bpRes.status === 404) {
+              branchProtection = {
+                enforced: false,
+                status: 'NO_PROTECTION_CONFIGURED',
+                reason: `No branch protection rules configured on '${branch}'`,
+              };
+              auditLog.push(`[GITHUB-VUA] ℹ️ No branch protection configured on branch '${branch}'`);
+            }
+          } catch (bpErr: any) {
+            auditLog.push(`[GITHUB-VUA] ⚠️ Branch protection inspection skipped: ${bpErr.message}`);
+          }
+        }
+
+        return {
+          data: {
+            success: true,
+            authenticated: Boolean(effectiveToken),
+            external_effect: 'remote_confirmed',
+            repository: repoData.full_name,
+            default_branch: repoData.default_branch,
+            visibility: repoData.visibility || (repoData.private ? 'private' : 'public'),
+            open_issues_count: repoData.open_issues_count,
+            stars_count: repoData.stargazers_count,
+            forks_count: repoData.forks_count,
+            branch_protection: branchProtection,
+            vortex_governed: Boolean(
+              repoData.description?.toLowerCase().includes('vortex') ||
+              repoData.description?.toLowerCase().includes('vua')
+            ),
+          },
+          auditLog,
+        };
+      } catch (networkErr: any) {
+        auditLog.push(`[GITHUB-VUA] 🛑 GITHUB_UNREACHABLE: ${networkErr.message}. Fail closed.`);
+        return {
+          data: {
+            success: false,
+            authenticated: Boolean(token),
+            external_effect: 'none',
+            execution_kind: 'capability',
+            provider: 'github',
+            error: {
+              code: 'GITHUB_UNREACHABLE',
+              message: `Could not reach GitHub API: ${networkErr.message}`,
+            },
+          },
+          auditLog,
+        };
+      }
     }
 
     if (action === 'verify_commit') {
-      const sha = (target.commit_sha || payload.commit_sha || '856920785b8392b036211cc851e1f6467961ff52') as string;
-      auditLog.push(`[GITHUB-VUA] Fetching commit object ${sha}`);
-      auditLog.push(`[GITHUB-VUA] Verifying cryptographic commit signature with author key`);
+      const owner = (target.owner || payload.owner || 'scoobiii') as string;
+      const repo = (target.repo || payload.repo || 'vua') as string;
+      const sha = (target.commit_sha || target.sha || payload.commit_sha || payload.sha) as string;
 
-      return {
-        data: {
-          commit_sha: sha,
-          author: 'Vortex Protocol Engine <governance@vortex.foundation>',
-          committer: 'GitHub Enterprise / VUA Gateway',
-          signature_type: 'Ed25519',
-          signature_status: 'VERIFIED',
-          signer_key_id: 'ed25519:vua-prod-v1',
-          tamper_evident: true,
-          tree_sha: 'sha256:d82e811c471029c8e8113bba4d29381ea610cf91a82e9b01239ab81efccaa892',
-          message: 'chore(vua): seal normative multi-platform connector specifications',
-        },
-        auditLog,
+      if (!sha) {
+        auditLog.push(`[GITHUB-VUA] 🛑 INVALID_INPUT: commit_sha is required. Fail closed.`);
+        return {
+          data: {
+            success: false,
+            authenticated: false,
+            external_effect: 'none',
+            execution_kind: 'capability',
+            provider: 'github',
+            error: {
+              code: 'INVALID_INPUT',
+              message: 'commit_sha is required for verify_commit',
+            },
+          },
+          auditLog,
+        };
+      }
+
+      auditLog.push(`[GITHUB-VUA] Querying commit ${sha} on ${owner}/${repo} via GitHub REST API`);
+
+      const token = (process.env.GITHUB_TOKEN || payload.token) as string | undefined;
+      const headers: Record<string, string> = {
+        Accept: 'application/vnd.github+json',
+        'User-Agent': 'VUA-Connector-Governance/3.0',
       };
+      if (token) {
+        headers['Authorization'] = `Bearer ${token.trim()}`;
+      }
+
+      // Offline test fixture support only when explicitly requested
+      if (payload.offline_fixture === true) {
+        auditLog.push(`[GITHUB-VUA] ℹ️ Using explicit offline sandbox fixture for commit`);
+        return {
+          data: {
+            success: true,
+            authenticated: Boolean(token),
+            external_effect: 'local_only',
+            commit_sha: sha,
+            author: 'Vortex Protocol Engine <governance@vortex.foundation>',
+            committer: 'GitHub Enterprise / VUA Gateway',
+            signature_type: 'Ed25519',
+            signature_status: 'FIXTURE',
+            signer_key_id: 'ed25519:vua-fixture-v1',
+            tamper_evident: true,
+            tree_sha: 'none',
+            message: 'fixture commit for offline testing',
+          },
+          auditLog,
+        };
+      }
+
+      try {
+        let effectiveToken = token;
+        let commitRes = await fetch(`https://api.github.com/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/commits/${encodeURIComponent(sha)}`, {
+          headers,
+          signal: AbortSignal.timeout(10_000),
+        });
+
+        if (commitRes.status === 401 && token) {
+          auditLog.push(`[GITHUB-VUA] ⚠️ Configured token returned HTTP 401 (Bad credentials). Falling back to unauthenticated public commit read...`);
+          effectiveToken = undefined;
+          commitRes = await fetch(`https://api.github.com/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/commits/${encodeURIComponent(sha)}`, {
+            headers: {
+              Accept: 'application/vnd.github+json',
+              'User-Agent': 'VUA-Connector-Governance/3.0',
+            },
+            signal: AbortSignal.timeout(10_000),
+          });
+        }
+
+        if (commitRes.status === 404) {
+          auditLog.push(`[GITHUB-VUA] 🛑 GITHUB_COMMIT_NOT_FOUND: Commit '${sha}' not found in repository '${owner}/${repo}' (HTTP 404). Fail closed.`);
+          return {
+            data: {
+              success: false,
+              authenticated: Boolean(effectiveToken),
+              external_effect: 'none',
+              execution_kind: 'capability',
+              provider: 'github',
+              error: {
+                code: 'GITHUB_COMMIT_NOT_FOUND',
+                message: `Commit '${sha}' not found in repository '${owner}/${repo}' on GitHub (HTTP 404)`,
+              },
+            },
+            auditLog,
+          };
+        }
+
+        if (!commitRes.ok) {
+          const errText = await commitRes.text();
+          const errCode = commitRes.status === 401 ? 'CREDENTIAL_INVALID' : commitRes.status === 403 ? 'GITHUB_RATE_LIMITED' : 'GITHUB_API_ERROR';
+          auditLog.push(`[GITHUB-VUA] 🛑 ${errCode}: HTTP ${commitRes.status} from GitHub API. Fail closed.`);
+          return {
+            data: {
+              success: false,
+              authenticated: Boolean(effectiveToken),
+              external_effect: 'none',
+              execution_kind: 'capability',
+              provider: 'github',
+              error: {
+                code: errCode,
+                message: `GitHub API error (${commitRes.status}): ${errText.slice(0, 200)}`,
+              },
+            },
+            auditLog,
+          };
+        }
+
+        const commitData = (await commitRes.json()) as any;
+        const verification = commitData.commit?.verification;
+        const isVerified = verification?.verified === true;
+        auditLog.push(`[GITHUB-VUA] ✅ Remote commit verified: ${commitData.sha?.substring(0, 7)} (verified=${isVerified})`);
+
+        return {
+          data: {
+            success: true,
+            authenticated: Boolean(effectiveToken),
+            external_effect: 'remote_confirmed',
+            commit_sha: commitData.sha,
+            author: `${commitData.commit?.author?.name || 'unknown'} <${commitData.commit?.author?.email || 'no-email'}>`,
+            committer: commitData.commit?.committer?.name || 'unknown',
+            signature_type: verification?.reason || 'none',
+            signature_status: isVerified ? 'VERIFIED' : (verification?.reason === 'unsigned' ? 'UNSIGNED' : 'UNVERIFIED'),
+            signer_key_id: verification?.signature ? 'github:verified-key' : 'none',
+            tamper_evident: isVerified,
+            tree_sha: commitData.commit?.tree?.sha || 'none',
+            message: commitData.commit?.message || '',
+            html_url: commitData.html_url,
+          },
+          auditLog,
+        };
+      } catch (networkErr: any) {
+        auditLog.push(`[GITHUB-VUA] 🛑 GITHUB_UNREACHABLE: ${networkErr.message}. Fail closed.`);
+        return {
+          data: {
+            success: false,
+            authenticated: Boolean(token),
+            external_effect: 'none',
+            execution_kind: 'capability',
+            provider: 'github',
+            error: {
+              code: 'GITHUB_UNREACHABLE',
+              message: `Could not reach GitHub API: ${networkErr.message}`,
+            },
+          },
+          auditLog,
+        };
+      }
     }
 
     if (action === 'propose_pr') {

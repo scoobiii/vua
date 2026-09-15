@@ -836,10 +836,10 @@ async function startServer() {
 
   // 21. GitHub Repository & Project Manager API (Secure & Governed)
   let activeGitHubTarget = {
-    owner: 'vuafoundation',
+    owner: 'scoobiii',
     repo: 'vua',
     branch: 'main',
-    commit_sha: '856920785b8392b036211cc851e1f6467961ff52',
+    commit_sha: 'df7960eb0e3511188563b825d4426baaae0ebbef',
     updated_at: new Date().toISOString(),
   };
 
@@ -1137,14 +1137,19 @@ async function startServer() {
         ...payload,
       };
 
+      const targetOwner = payload.owner || activeGitHubTarget.owner;
+      const targetRepo = payload.repo || activeGitHubTarget.repo;
+      const targetBranch = payload.branch || activeGitHubTarget.branch;
+      const targetCommitSha = payload.commit_sha || payload.sha || activeGitHubTarget.commit_sha;
+
       const result = await vuaRegistry.invoke({
         adapterId: 'github',
         action,
         target: {
-          owner: activeGitHubTarget.owner,
-          repo: activeGitHubTarget.repo,
-          branch: activeGitHubTarget.branch,
-          commit_sha: activeGitHubTarget.commit_sha,
+          owner: targetOwner,
+          repo: targetRepo,
+          branch: targetBranch,
+          commit_sha: targetCommitSha,
         },
         payload: effectivePayload,
       });
