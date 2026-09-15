@@ -172,6 +172,27 @@ A suíte adversarial testa ativamente as 5 violações de segurança fundamentai
 
 ---
 
+## 📈 Linha de Evolução: Do 1º Sprint ao Estado Atual e Rumo à Produção
+
+```
+┌─────────────────────────┐     ┌─────────────────────────┐     ┌─────────────────────────┐
+│       1º SPRINT         │     │      ONDE ESTAMOS       │     │     RUMO À PRODUÇÃO     │
+│   (Fundação & Núcleo)   │ ──► │ (Governança & Integração│ ──► │  (Endurecimento & GAIS) │
+│                         │     │    Multi-Ambiente)      │     │                         │
+│   [Concluído: 100%]     │     │      [ESTADO ATUAL]     │     │      [ROADMAP FINAL]    │
+└─────────────────────────┘     └─────────────────────────┘     └─────────────────────────┘
+```
+
+| Fase | Marco / Dimensão | Entregas & Capacidades Chave | Status |
+| :--- | :--- | :--- | :--- |
+| **1º SPRINT**<br>*(Fundação & Provas)* | **Canonicalização & Criptografia** | • Canonicalização determinística **RFC 8785 (JCS)**.<br>• Assinatura e verificação Ed25519 (`vortex-execution-evidence/v1`).<br>• Motor antifraude com 5 testes adversariais (FORGE, REPLAY, ESCALATE, ESCAPE, TAMPER).<br>• Contrato de isolamento e governança de recursos GOS3. | ✅ Concluído (100% PASS) |
+| | **Adaptadores Fundamentais** | • Adaptadores locais Linux POSIX (`cgroups`, `chroot`) e Android AOSP (`SELinux`, `Scoped Storage`).<br>• CLI `bin/vua.js` para inspeção, benchmark e invocação local.<br>• Suíte básica de execução canária. | ✅ Concluído |
+| **ONDE ESTAMOS**<br>*(Estado Atual)* | **MCP & Registro Multi-LLM** | • Servidor **Model Context Protocol (MCP)** em `bin/mcp-server.js` com ferramentas canônicas (`vortex.*`).<br>• Catálogo federado `vua-llms.json` e script de resolução (`npm run vua:llms`) para Gemini, OpenAI e Ollama offline.<br>• Documentação arquitetural formal em `docs/RUNTIME.md` e `docs/GAIS.md`. | 🟢 Ativo & Operacional |
+| | **GitHub Seguro & Ciclo Git** | • Sincronização e binding com repositório remoto (`scoobiii/vua`).<br>• Token de sessão volátil (zero persistência em disco/logs).<br>• Operações governadas de escrita de PR (`create_pr_written`), commit em branch (`write_branch_commit`) e merge seguro (`merge_pr`).<br>• Equivalência determinística (`vua:prove`) e comparação de baselines (`tao:compare`).<br>• 15 Quality Gates automáticos no CI (`npm test` com 100% de aprovação). | 🟢 Ativo & Operacional |
+| **RUMO À PRODUÇÃO**<br>*(Próximos Passos)* | **Endurecimento & Ativação GAIS** | • Ativação em produção do **GAIS (Governance AI System)** via MCP.<br>• Rotação e custódia segura de chaves Ed25519 corporativas (KMS/HSM).<br>• Monitoramento de deriva semântica de modelos (evaluators contínuos).<br>• Empacotamento de distribuição final: binário autônomo e contêiner Alpine de produção minimalista com auditoria estrita. | 🟡 Planejado |
+
+---
+
 ## 📜 Licença & Governança
 
 Especificação aberta e código sob licença MIT. Desenvolvido pela **Vortex Open Protocol Foundation** para assegurar segurança, transparência e reprodutibilidade matemática em sistemas com agentes autônomos.
