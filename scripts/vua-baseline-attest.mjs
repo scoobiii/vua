@@ -162,7 +162,10 @@ async function verifyBaseline(args) {
   const publicKey = createPublicKey(await readFile(args.key));
   const valid = actualHash === payload_hash && verify(null, Buffer.from(payload), publicKey, Buffer.from(signature, 'base64'));
   const policy = baseline.policy ?? {};
-  const runnerProfile = detectRunnerProfile(args.profile ?? process.env.VORTEX_RUNNER_PROFILE ?? null);
+  const skipRunnerProfile = args['skip-runner-profile'] === true;
+  const runnerProfile = skipRunnerProfile
+    ? detectRunnerProfile(null)
+    : detectRunnerProfile(args.profile ?? process.env.VORTEX_RUNNER_PROFILE ?? null);
   const baselineProfile = baseline.runner_profile;
   const checks = {
     schema: baseline.schema === 'vortex.performance-baseline/v1',
@@ -173,7 +176,7 @@ async function verifyBaseline(args) {
     sample_size: Number.isInteger(baseline.workload?.sampleSize) && baseline.workload.sampleSize >= (policy.min_sample_size ?? 30),
     errors: Number(baseline.metrics?.error_rate_pct) <= Number(policy.max_error_rate_pct ?? 0),
     timeouts: Number(baseline.metrics?.timeout_rate_pct) <= Number(policy.max_timeout_rate_pct ?? 0),
-    runner_profile: args['skip-runner-profile'] ? true : profileCompatible(baselineProfile, runnerProfile),
+    runner_profile: skipRunnerProfile ? true : profileCompatible(baselineProfile, runnerProfile),
   };
   const accepted = Object.values(checks).every(Boolean);
   console.log(JSON.stringify({ status: accepted ? 'BASELINE_ACCEPTED' : 'BASELINE_REJECTED', accepted, checks, runner_profile: runnerProfile, baseline_profile: baselineProfile ?? null, payload_hash: actualHash, baseline_id: baseline.baseline_id }, null, 2));
@@ -182,7 +185,10 @@ async function verifyBaseline(args) {
 
 const [mode, ...rest] = process.argv.slice(2);
 const args = Object.fromEntries(rest.reduce((pairs, item, index, all) => {
-  if (item.startsWith('--')) pairs.push([item.slice(2), all[index + 1]?.startsWith('--') ? true : all[index + 1]]);
+  if (item.startsWith('--')) {
+    const next = all[index + 1];
+    pairs.push([item.slice(2), next === undefined || next.startsWith('--') ? true : next]);
+  }
   return pairs;
 }, []));
 try {
