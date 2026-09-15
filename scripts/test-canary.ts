@@ -125,7 +125,11 @@ export async function runCanaryTests(): Promise<number> {
   return passedTests;
 }
 
-if (import.meta.url === `file://${process.argv[1]}`) {
+const isDirectExecution = typeof require !== 'undefined' && typeof module !== 'undefined'
+  ? require.main === module
+  : process.argv[1]?.endsWith('test-canary.ts') || process.argv[1]?.endsWith('test-canary.js');
+
+if (isDirectExecution) {
   runCanaryTests().catch((err) => {
     console.error(err);
     process.exit(1);
