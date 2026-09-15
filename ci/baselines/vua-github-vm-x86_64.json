@@ -1,0 +1,61 @@
+{
+  "schema": "vortex.performance-baseline/v1",
+  "baseline_id": "baseline-1789454313488-2521",
+  "git": {
+    "commit": "c37ebed7249fc787f41c6d310bf5396df89a133f",
+    "branch": "main",
+    "tree": "clean",
+    "repository": "/home/runner/work/vua/vua"
+  },
+  "environment": {
+    "captured_at": "2026-09-15T06:38:33.500Z",
+    "node": "v22.23.2",
+    "exec_path": "/opt/hostedtoolcache/node/22.23.2/x64/bin/node",
+    "platform": "linux",
+    "architecture": "x64",
+    "kernel": "6.17.0-1022-azure",
+    "hostname": "runnervmlun5p",
+    "cpu_model": "AMD EPYC 7763 64-Core Processor",
+    "cpu_count": 4,
+    "memory_bytes": 16766410752,
+    "load_average": [
+      0.8,
+      0.21,
+      0.07
+    ]
+  },
+  "runner_profile": {
+    "id": "github-vm",
+    "deployment": "github-actions",
+    "architectures": [
+      "x86_64"
+    ],
+    "architecture": "x86_64",
+    "detected_by": "explicit"
+  },
+  "workload": {
+    "name": "local-crypto",
+    "transport": "unspecified",
+    "concurrency": 1,
+    "warmupSize": 0,
+    "sampleSize": 200
+  },
+  "metrics": {
+    "throughput_ops_sec": 5263,
+    "latency_avg_us": 190,
+    "sampleSize": 200,
+    "error_rate_pct": 0,
+    "timeout_rate_pct": 0,
+    "memory_mb": 111.9
+  },
+  "policy": {
+    "min_sample_size": 30,
+    "max_error_rate_pct": 0,
+    "max_timeout_rate_pct": 0,
+    "tree_must_be_clean": true,
+    "signature_algorithm": "Ed25519"
+  },
+  "public_key": "-----BEGIN PUBLIC KEY-----\nMCowBQYDK2VwAyEApFNn/1NH4AqwOZB2Oupk2WsldTMUq+vwt1zA9d+E7Wc=\n-----END PUBLIC KEY-----\n",
+  "payload_hash": "sha256:0291f5197ec99d75701c6f302b5456bd0306ad2af9bf1c235672215056a00e5e",
+  "signature": "qFWPvUvSeMFXyBPpl17GO/sVtRaqgvNIe3uMZJFnYY4th3UovqcbuxUDbRqTCHojRzOlz5c911dlqILfFZSQAA=="
+}
