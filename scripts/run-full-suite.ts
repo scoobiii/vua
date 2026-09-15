@@ -648,7 +648,7 @@ ${benchmarkSummary}`,
     assert(resPR.success === false, 'Unauthenticated PR must fail');
     assert(resPR.external_effect === 'none', 'External effect must be none');
     assert(resPR.authenticated === false, 'Authenticated status must be false');
-    assert(resPR.data?.error?.code === 'CREDENTIAL_MISSING', 'Error code must be CREDENTIAL_MISSING');
+    assert((resPR.data as { error?: { code?: string } } | undefined)?.error?.code === 'CREDENTIAL_MISSING', 'Error code must be CREDENTIAL_MISSING');
 
     // 2. Local patch preparation succeeds with external_effect: local_only
     const resPatch = await vuaRegistry.invoke({
@@ -662,7 +662,7 @@ ${benchmarkSummary}`,
 
     assert(resPatch.success === true, 'Local patch preparation must succeed');
     assert(resPatch.external_effect === 'local_only', 'Patch must be classified as local_only');
-    assert(resPatch.data?.data?.branch === 'fix/perf-optimization', 'Branch metadata recorded');
+    assert((resPatch.data as { data?: { branch?: string } } | undefined)?.data?.branch === 'fix/perf-optimization', 'Branch metadata recorded');
 
     // 3. Approval claims validation - Expired token must be rejected
     const expiredApproval: ApprovalClaims = {

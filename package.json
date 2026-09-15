@@ -14,7 +14,7 @@
     "preview": "vite preview",
     "clean": "rm -rf dist server.js",
     "lint": "tsc --noEmit",
-    "test": "tsx scripts/run-full-suite.ts",
+    "test": "npm run lint && npm run test:security && tsx scripts/run-full-suite.ts",
     "test:policy": "tsx tests/patch-arena-policy.test.ts",
     "test:arena": "tsx scripts/agent-patch-arena.ts",
     "test:threads": "tsx scripts/test-threads.ts",
@@ -22,12 +22,11 @@
     "vua": "tsx bin/vua.js",
     "bench": "tsx bin/vua.js bench",
     "bench:semantic": "tsx scripts/run-semantic-benchmark.ts",
-    "tao:map": "tsx scripts/tao-capability-map.ts",
-    "tao:map:quick": "VUA_TAO_QUICK=1 tsx scripts/tao-capability-map.ts",
     "tao:compare": "tsx scripts/tao-compare.ts",
     "vua:prove": "tsx scripts/vua-prove-equivalent.ts",
     "vua:llms": "tsx scripts/vua-llm-resolve.ts",
-    "mcp": "tsx bin/mcp-server.js"
+    "mcp": "tsx bin/mcp-server.js",
+    "test:security": "tsx tests/oauth-security.test.ts"
   },
   "dependencies": {
     "@google/genai": "^2.4.0",

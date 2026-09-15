@@ -33,23 +33,43 @@ import {
   type AuthenticatedFirebaseRequest,
 } from './src/vortex/firebase-auth.js';
 import { RepositoryBootstrapper } from './src/repository/bootstrap/RepositoryBootstrapper.js';
+import { mountOAuth, requireBearer } from './src/vortex/oauth.js';
 
-const PORT = 3000;
+const PORT = Number(process.env.PORT || 3000);
+const configuredPublicBase = (process.env.PUBLIC_BASE_URL || process.env.APP_URL || '').replace(/\/$/, '');
+const mcpResource = (req: express.Request): string => {
+  const forwarded = req.get('x-forwarded-proto')?.split(',')[0]?.trim();
+  const protocol = forwarded === 'https' || req.protocol === 'https' ? 'https' : 'http';
+  const base = configuredPublicBase || `${protocol}://${req.get('host') || `localhost:${PORT}`}`;
+  return `${base}/mcp`;
+};
+const requireMcpBearer = requireBearer(mcpResource);
 
 async function startServer() {
   const app = express();
 
-  // Middleware
+  // Production-safe middleware: explicit CORS, security headers, bounded bodies.
+  const allowedOrigin = process.env.CORS_ORIGIN || '';
   app.use((req, res, next) => {
-    res.header('Access-Control-Allow-Origin', '*');
-    res.header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS, PUT, DELETE');
+    const origin = req.get('origin');
+    if (origin && (process.env.NODE_ENV !== 'production' && !allowedOrigin || origin === allowedOrigin)) {
+      res.header('Access-Control-Allow-Origin', origin);
+      res.header('Vary', 'Origin');
+    }
+    res.header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
     res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With, mcp-session-id');
+    res.header('Access-Control-Expose-Headers', 'WWW-Authenticate, mcp-session-id');
+    res.header('X-Content-Type-Options', 'nosniff');
+    res.header('X-Frame-Options', 'DENY');
+    res.header('Referrer-Policy', 'no-referrer');
     if (req.method === 'OPTIONS') {
       return res.sendStatus(200);
     }
     next();
   });
-  app.use(express.json({ limit: '10mb' }));
+  app.use(express.json({ limit: process.env.JSON_BODY_LIMIT || '1mb' }));
+  app.use(express.urlencoded({ extended: false, limit: '32kb' }));
+  mountOAuth(app, { publicBaseUrl: configuredPublicBase || undefined });
 
   // 0. Interactive Swagger UI & Raw OpenAPI Spec
   app.get('/api/openapi.json', (req, res) => {
@@ -370,7 +390,6 @@ async function startServer() {
       'Cache-Control': 'no-cache, no-transform',
       'Connection': 'keep-alive',
       'X-Accel-Buffering': 'no',
-      'Access-Control-Allow-Origin': '*',
     });
 
     sseSessions.set(sessionId, res);
@@ -397,7 +416,7 @@ async function startServer() {
     });
   };
 
-  app.get(['/mcp', '/sse'], (req, res) => {
+  app.get(['/mcp', '/sse'], requireMcpBearer, (req, res) => {
     if (req.headers.accept && req.headers.accept.includes('text/event-stream')) {
       return handleSseConnection(req, res);
     }
@@ -419,23 +438,16 @@ async function startServer() {
   });
 
   // Dedicated SSE route for clients explicitly configured with /sse
-  app.get('/sse', (req, res) => {
+  app.get('/sse', requireMcpBearer, (req, res) => {
     return handleSseConnection(req, res);
   });
 
   // MCP Messages Endpoint (POST from SSE clients)
-  app.post(['/mcp/messages', '/messages'], async (req, res) => {
+  app.post(['/mcp/messages', '/messages'], requireMcpBearer, async (req, res) => {
     try {
       const sessionId = (req.query.sessionId as string) || (req.headers['mcp-session-id'] as string);
       const sseRes = sessionId ? sseSessions.get(sessionId) : undefined;
 
-      const authHeader = req.headers.authorization;
-      if (authHeader && authHeader.startsWith('Bearer ') && req.body?.params?.arguments) {
-        const token = authHeader.slice(7).trim();
-        if (!req.body.params.arguments.approval_token && token) {
-          req.body.params.arguments.approval_token = token;
-        }
-      }
 
       const rpcResponse = await handleMCPMessage(req.body);
 
@@ -449,21 +461,13 @@ async function startServer() {
       res.status(500).json({
         jsonrpc: '2.0',
         id: req.body?.id ?? null,
-        error: { code: -32603, message: `Internal error: ${err}` },
+        error: { code: -32603, message: 'Internal server error' },
       });
     }
   });
 
-  app.post('/mcp', async (req, res) => {
+  app.post('/mcp', requireMcpBearer, async (req, res) => {
     try {
-      // Extract Bearer token from header if present
-      const authHeader = req.headers.authorization;
-      if (authHeader && authHeader.startsWith('Bearer ') && req.body?.params?.arguments) {
-        const token = authHeader.slice(7).trim();
-        if (!req.body.params.arguments.approval_token && token) {
-          req.body.params.arguments.approval_token = token;
-        }
-      }
 
       const response = await handleMCPMessage(req.body);
       res.json(response);
@@ -471,7 +475,7 @@ async function startServer() {
       res.status(500).json({
         jsonrpc: '2.0',
         id: req.body?.id ?? null,
-        error: { code: -32603, message: `Internal error: ${err}` },
+        error: { code: -32603, message: 'Internal server error' },
       });
     }
   });
@@ -1150,7 +1154,7 @@ async function startServer() {
   }
 
   app.listen(PORT, '0.0.0.0', () => {
-    console.log(`Vortex MCP Server listening on http://0.0.0.0:${PORT}`);
+    console.log(`Vortex MCP Server listening on port ${PORT} (oauth_required=${process.env.VUA_OAUTH_REQUIRED !== 'false'})`);
   });
 }
 

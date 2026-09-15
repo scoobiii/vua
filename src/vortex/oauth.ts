@@ -21,6 +21,7 @@ const CODE_TTL = 5 * 60 * 1000;
 const TOKEN_TTL = 3600;
 const RATE_WINDOW = 15 * 60 * 1000;
 const RATE_MAX = 5;
+const SUPPORTED_SCOPE = 'mcp';
 
 const randomToken = (bytes = 32) => crypto.randomBytes(bytes).toString('base64url');
 const challenge = (value: string) => crypto.createHash('sha256').update(value, 'utf8').digest('base64url');
@@ -59,7 +60,7 @@ export function mountOAuth(app: Express, options: { publicBaseUrl?: string } = {
 
   app.get('/.well-known/oauth-protected-resource', (req, res) => {
     const b = base(req, configured);
-    res.json({ resource: resource(b), authorization_servers: [b], scopes_supported: ['mcp'], bearer_methods_supported: ['header'] });
+    res.json({ resource: resource(b), authorization_servers: [b], scopes_supported: [SUPPORTED_SCOPE], bearer_methods_supported: ['header'] });
   });
 
   app.get('/.well-known/oauth-authorization-server', (req, res) => {
@@ -73,7 +74,7 @@ export function mountOAuth(app: Express, options: { publicBaseUrl?: string } = {
       grant_types_supported: ['authorization_code'],
       code_challenge_methods_supported: ['S256'],
       token_endpoint_auth_methods_supported: ['none'],
-      scopes_supported: ['mcp'],
+      scopes_supported: [SUPPORTED_SCOPE],
     });
   });
 
@@ -94,7 +95,8 @@ export function mountOAuth(app: Express, options: { publicBaseUrl?: string } = {
   app.get('/oauth/authorize', (req, res) => {
     const { response_type, client_id, redirect_uri, code_challenge, code_challenge_method } = req.query;
     const state = typeof req.query.state === 'string' ? req.query.state : '';
-    const scope = typeof req.query.scope === 'string' ? req.query.scope : 'mcp';
+    const scope = typeof req.query.scope === 'string' ? req.query.scope : SUPPORTED_SCOPE;
+    if (scope !== SUPPORTED_SCOPE) return res.status(400).send('Unsupported scope');
     const requestedResource = typeof req.query.resource === 'string' ? req.query.resource : '';
     if (response_type !== 'code' || typeof client_id !== 'string' || typeof redirect_uri !== 'string' || typeof code_challenge !== 'string' || code_challenge_method !== 'S256') return res.status(400).send('Invalid OAuth authorization request');
     const client = clients.get(client_id);
@@ -116,7 +118,7 @@ export function mountOAuth(app: Express, options: { publicBaseUrl?: string } = {
     const client = clients.get(client_id);
     if (!client || !client.redirect_uris.includes(redirect_uri)) return res.status(400).send('Invalid client');
     const code = randomToken(32);
-    codes.set(code, { client_id, redirect_uri, code_challenge, scope: String(scope), resource: resourceValue, expires_at: Date.now() + CODE_TTL, used: false });
+    codes.set(code, { client_id, redirect_uri, code_challenge, scope: SUPPORTED_SCOPE, resource: resourceValue, expires_at: Date.now() + CODE_TTL, used: false });
     const target = new URL(redirect_uri);
     target.searchParams.set('code', code);
     if (typeof state === 'string' && state) target.searchParams.set('state', state);
@@ -145,7 +147,10 @@ export function validateAccessToken(token: string, expectedResource: string): { 
   return { client_id: record.client_id, scope: record.scope };
 }
 
-export function oauthRequired(): boolean { return process.env.VUA_OAUTH_REQUIRED === 'true'; }
+export function oauthRequired(): boolean {
+  if (process.env.NODE_ENV === 'production') return true;
+  return process.env.VUA_OAUTH_REQUIRED !== 'false';
+}
 
 export function requireBearer(expectedResource: (req: Request) => string) {
   return (req: Request, res: Response, next: () => void): void => {
