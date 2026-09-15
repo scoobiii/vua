@@ -69,6 +69,7 @@ async function startServer() {
   });
   app.use(express.json({ limit: process.env.JSON_BODY_LIMIT || '1mb' }));
   app.use(express.urlencoded({ extended: false, limit: '32kb' }));
+  app.use(express.static(path.join(process.cwd(), 'public')));
   mountOAuth(app, { publicBaseUrl: configuredPublicBase || undefined });
 
   // 0. Interactive Swagger UI & Raw OpenAPI Spec
@@ -466,18 +467,34 @@ async function startServer() {
     }
   });
 
-  app.post('/mcp', requireMcpBearer, async (req, res) => {
-    try {
-
-      const response = await handleMCPMessage(req.body);
-      res.json(response);
-    } catch (err: unknown) {
-      res.status(500).json({
-        jsonrpc: '2.0',
-        id: req.body?.id ?? null,
-        error: { code: -32603, message: 'Internal server error' },
-      });
+  app.post('/mcp', async (req, res, next) => {
+    // Permit read-only discovery methods without Bearer token to comply with MCP client discovery handshakes
+    const method = req.body?.method;
+    if (['initialize', 'notifications/initialized', 'initialized', 'ping', 'tools/list'].includes(method)) {
+      try {
+        const response = await handleMCPMessage(req.body);
+        return res.json(response);
+      } catch (err: unknown) {
+        return res.status(500).json({
+          jsonrpc: '2.0',
+          id: req.body?.id ?? null,
+          error: { code: -32603, message: 'Internal server error' },
+        });
+      }
     }
+    // All tool executions and mutating calls strictly require Bearer authorization
+    return requireMcpBearer(req, res, async () => {
+      try {
+        const response = await handleMCPMessage(req.body);
+        res.json(response);
+      } catch (err: unknown) {
+        res.status(500).json({
+          jsonrpc: '2.0',
+          id: req.body?.id ?? null,
+          error: { code: -32603, message: 'Internal server error' },
+        });
+      }
+    });
   });
 
   // 4. Status & Engine Metrics

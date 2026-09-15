@@ -156,15 +156,97 @@ export const GitHubRepoManager: React.FC<GitHubRepoManagerProps> = ({
     const text = await res.text();
     const trimmed = text.trim();
     if (trimmed.startsWith('<!doctype') || trimmed.startsWith('<!DOCTYPE') || trimmed.startsWith('<html')) {
-      throw new Error(
-        `O servidor retornou uma página HTML (${res.status}) em vez de JSON na rota '${res.url}'. Verifique se o servidor Express está ativo ('npm run dev' com 'tsx server.ts') e não apenas o Vite SPA.`
+      const err = new Error(
+        `O servidor retornou uma página HTML (${res.status}) em vez de JSON na rota '${res.url}'.`
       );
+      (err as any).isHtmlIntercept = true;
+      throw err;
     }
     try {
       return JSON.parse(text);
     } catch {
       throw new Error(`Resposta inválida do servidor (${res.status}): ${text.slice(0, 100)}`);
     }
+  };
+
+  // Client-Side Direct GitHub Connect (used when Google AI Studio preview proxy intercepts /api/github with cookie check)
+  const connectDirectGitHub = async (pat: string) => {
+    const cleanToken = pat.trim();
+    const ghRes = await fetch('https://api.github.com/user', {
+      headers: {
+        Authorization: `Bearer ${cleanToken}`,
+        'User-Agent': 'VUA-Connector-Governance/2.5.0',
+        Accept: 'application/vnd.github.v3+json',
+      },
+    });
+
+    if (!ghRes.ok) {
+      const errJson = await ghRes.json().catch(() => ({}));
+      throw new Error((errJson as any).message || `GitHub respondeu com erro ${ghRes.status} (verifique se o PAT é válido e possui escopo repo)`);
+    }
+
+    const userData = await ghRes.json();
+    const scopesHeader = ghRes.headers.get('x-oauth-scopes') || 'repo, read:org';
+    const scopes = scopesHeader.split(',').map((s: string) => s.trim()).filter(Boolean);
+
+    const user: GitHubUser = {
+      login: userData.login,
+      name: userData.name || userData.login,
+      avatar_url: userData.avatar_url,
+      bio: userData.bio || 'Desenvolvedor GitHub (Conexão Direta Client-Side)',
+      company: userData.company,
+      location: userData.location,
+      public_repos: userData.public_repos,
+      total_private_repos: userData.total_private_repos || 0,
+      followers: userData.followers,
+      scopes,
+      rate_limit: {
+        limit: Number(ghRes.headers.get('x-ratelimit-limit') || 5000),
+        remaining: Number(ghRes.headers.get('x-ratelimit-remaining') || 4999),
+        reset: Number(ghRes.headers.get('x-ratelimit-reset') || Math.floor(Date.now() / 1000) + 3600),
+      },
+      mode: 'authenticated',
+    };
+
+    // Also fetch repositories directly from GitHub API
+    try {
+      const reposRes = await fetch('https://api.github.com/user/repos?per_page=30&sort=updated', {
+        headers: {
+          Authorization: `Bearer ${cleanToken}`,
+          'User-Agent': 'VUA-Connector-Governance/2.5.0',
+          Accept: 'application/vnd.github.v3+json',
+        },
+      });
+      if (reposRes.ok) {
+        const reposData = await reposRes.json();
+        const mapped: Repository[] = reposData.map((r: any) => ({
+          id: r.id,
+          name: r.name,
+          full_name: r.full_name,
+          owner: r.owner?.login || userData.login,
+          description: r.description || 'Repositório GitHub verificado.',
+          private: r.private,
+          stars: r.stargazers_count,
+          forks: r.forks_count,
+          default_branch: r.default_branch || 'main',
+          language: r.language || 'TypeScript',
+          governed: true,
+        }));
+        if (mapped.length > 0) {
+          setRepos(mapped);
+          setActiveTarget({
+            owner: mapped[0].owner,
+            repo: mapped[0].name,
+            branch: mapped[0].default_branch,
+          });
+          setSelectedBranch(mapped[0].default_branch);
+        }
+      }
+    } catch {
+      // Repos list fetch error is non-fatal
+    }
+
+    return user;
   };
 
   // Fetch initial status & repos
@@ -202,20 +284,32 @@ export const GitHubRepoManager: React.FC<GitHubRepoManagerProps> = ({
     setLoadingAuth(true);
     setAuthError(null);
     try {
-      const res = await fetch('/api/github/connect', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ token: useDemo ? undefined : tokenInput, demo: useDemo }),
-      });
-      const data = await parseJsonResponse(res);
-      if (!res.ok || !data.authenticated) {
-        setAuthError(data.error || 'Falha ao autenticar com GitHub');
-        return;
-      }
+      try {
+        const res = await fetch('/api/github/connect', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ token: useDemo ? undefined : tokenInput, demo: useDemo }),
+        });
+        const data = await parseJsonResponse(res);
+        if (!res.ok || !data.authenticated) {
+          setAuthError(data.error || 'Falha ao autenticar com GitHub');
+          return;
+        }
 
-      setGithubUser(data.user);
-      setTokenInput('');
-      fetchStatusAndRepos();
+        setGithubUser(data.user);
+        setTokenInput('');
+        fetchStatusAndRepos();
+        return;
+      } catch (backendErr: any) {
+        if (backendErr?.isHtmlIntercept && !useDemo && tokenInput.trim()) {
+          console.warn('[VUA] Proxy HTML detectado no backend, conectando diretamente via api.github.com');
+          const directUser = await connectDirectGitHub(tokenInput);
+          setGithubUser(directUser);
+          setTokenInput('');
+          return;
+        }
+        throw backendErr;
+      }
     } catch (err: any) {
       setAuthError(err.message || 'Erro de rede ao conectar com GitHub');
     } finally {
@@ -280,17 +374,11 @@ export const GitHubRepoManager: React.FC<GitHubRepoManagerProps> = ({
     setLastEmittedProof(null);
 
     try {
-      const res = await fetch('/api/vua/adapters/github/invoke', {
+      const res = await fetch('/api/github/action', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           action,
-          target: {
-            owner: activeTarget.owner,
-            repo: activeTarget.repo,
-            branch: selectedBranch,
-            commit_sha: activeTarget.commit_sha || '856920785b8392b036211cc851e1f6467961ff52',
-          },
           payload: {
             owner: activeTarget.owner,
             repo: activeTarget.repo,
@@ -504,9 +592,15 @@ export const GitHubRepoManager: React.FC<GitHubRepoManagerProps> = ({
                 </div>
 
                 {authError && (
-                  <div className="p-2.5 rounded-lg bg-red-950/50 border border-red-800/50 text-red-300 text-xs flex items-center gap-2">
-                    <AlertTriangle className="w-4 h-4 shrink-0 text-red-400" />
-                    <span className="truncate">{authError}</span>
+                  <div className="p-2.5 rounded-lg bg-red-950/50 border border-red-800/50 text-red-300 text-xs space-y-1">
+                    <div className="flex items-center gap-2">
+                      <AlertTriangle className="w-4 h-4 shrink-0 text-red-400" />
+                      <span className="font-semibold">Erro de Conexão</span>
+                    </div>
+                    <p className="text-[11px] leading-relaxed text-red-300/90">{authError}</p>
+                    <p className="text-[10px] text-zinc-400 pt-1 border-t border-red-900/40">
+                      💡 <strong>Dica para WebAPK / Mobile:</strong> Cole seu Personal Access Token (PAT) do GitHub acima para autenticar com acesso direto. Ou clique em "Usar Repositórios Demo" para explorar sem token.
+                    </p>
                   </div>
                 )}
 
