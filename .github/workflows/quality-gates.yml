@@ -1,0 +1,115 @@
+name: quality-gates
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: quality-gates-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  NODE_VERSION: '22.x'
+  RUNNER_PROFILE: github-vm
+  BASELINE_PATH: ci/baselines/vua-github-vm-x86_64.json
+  MOBILE_EVIDENCE_PATH: ci/baselines/vua-mobile.json
+  BASELINE_PUBLIC_KEY: ci/keys/baseline-public.pem
+
+jobs:
+  quality:
+    name: Lint, tests, build and attested performance gate
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - name: Checkout exact revision
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Lint
+        run: npm run lint
+
+      - name: GOS3 verification
+        run: npm run verify:gos3
+
+      - name: Unit and integration tests
+        run: npm test
+
+      - name: Build
+        run: npm run build
+
+      - name: Check baseline files
+        run: |
+          test -s "$BASELINE_PUBLIC_KEY"
+          test -s "$BASELINE_PATH"
+
+      - name: Verify baseline signature and provenance
+        run: |
+          node scripts/vua-baseline-attest.mjs verify \
+            --baseline "$BASELINE_PATH" \
+            --key "$BASELINE_PUBLIC_KEY" \
+            --profile "$RUNNER_PROFILE"
+
+      - name: Verify Mobile evidence when present
+        if: ${{ hashFiles('ci/baselines/vua-mobile.json') != '' }}
+        run: |
+          node scripts/vua-baseline-attest.mjs verify \
+            --baseline "$MOBILE_EVIDENCE_PATH" \
+            --key "$BASELINE_PUBLIC_KEY" \
+            --profile mobile \
+            --skip-runner-profile
+
+      - name: Run contextual benchmark
+        run: |
+          test -x scripts/capture-performance-metrics.mjs
+          node scripts/capture-performance-metrics.mjs \
+            --output /tmp/current-metrics.json \
+            --profile "$RUNNER_PROFILE"
+
+      - name: Compare against verified baseline
+        run: |
+          node scripts/verify-performance-baseline.mjs \
+            --baseline "$BASELINE_PATH" \
+            --metrics /tmp/current-metrics.json \
+            --public-key "$BASELINE_PUBLIC_KEY" \
+            --profile "$RUNNER_PROFILE" \
+            --mobile-evidence "$MOBILE_EVIDENCE_PATH" \
+            --result /tmp/benchmark-verdict.json
+
+      - name: Publish benchmark evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: quality-gates-${{ github.sha }}
+          path: |
+            /tmp/current-metrics.json
+            /tmp/benchmark-verdict.json
+            ${{ env.BASELINE_PATH }}
+          if-no-files-found: warn
+
+      - name: Enforce verdict
+        run: |
+          node -e '
+            const fs = require("fs");
+            const p = "/tmp/benchmark-verdict.json";
+            const r = JSON.parse(fs.readFileSync(p, "utf8"));
+            const allowed = ["PASS_SUPERIOR", "PASS_ACCEPTABLE"];
+            if (!allowed.includes(r.verdict)) {
+              console.error(JSON.stringify(r, null, 2));
+              process.exit(1);
+            }
+          '

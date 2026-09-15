@@ -1,0 +1,117 @@
+name: refresh-baseline
+
+on:
+  workflow_dispatch:
+    inputs:
+      profile:
+        description: 'Baseline profile for the runner that executes this workflow'
+        required: true
+        type: choice
+        options:
+          - github-vm
+          - mobile
+          - cloud-run
+      reason:
+        description: 'Reason for refreshing the baseline'
+        required: true
+        type: string
+      sample_size:
+        description: 'Number of measured samples'
+        required: true
+        default: '200'
+        type: string
+
+permissions:
+  contents: read
+
+env:
+  NODE_VERSION: '22.x'
+
+jobs:
+  refresh:
+    name: Capture and attest baseline
+    runs-on: ubuntu-24.04
+    environment:
+      name: baseline-refresh
+    timeout-minutes: 30
+    steps:
+      - name: Checkout exact base revision
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Verify source before capture
+        run: |
+          npm run lint
+          npm run verify:gos3
+          git diff --exit-code
+          test -z "$(git status --porcelain)"
+
+      - name: Capture repeated performance measurements
+        env:
+          PROFILE: ${{ inputs.profile }}
+          SAMPLE_SIZE: ${{ inputs.sample_size }}
+        run: |
+          case "$SAMPLE_SIZE" in
+            ''|*[!0-9]*) echo 'sample_size must be an integer' >&2; exit 2 ;;
+          esac
+          test "$SAMPLE_SIZE" -ge 30
+          if [ "$PROFILE" = "github-vm" ] && [ "${GITHUB_ACTIONS:-}" != "true" ]; then
+            echo 'github-vm baselines must be captured inside GitHub Actions' >&2
+            exit 1
+          fi
+          node scripts/capture-performance-metrics.mjs \
+            --output /tmp/metrics.json \
+            --profile "$PROFILE" \
+            --sample-size "$SAMPLE_SIZE"
+
+      - name: Generate signed baseline
+        env:
+          BASELINE_PRIVATE_KEY: ${{ secrets.VORTEX_BASELINE_PRIVATE_KEY }}
+          PROFILE: ${{ inputs.profile }}
+          REASON: ${{ inputs.reason }}
+        run: |
+          test -n "$BASELINE_PRIVATE_KEY"
+          umask 077
+          printf '%s\n' "$BASELINE_PRIVATE_KEY" > /tmp/baseline-private.pem
+          node scripts/vua-baseline-attest.mjs capture \
+            --metrics /tmp/metrics.json \
+            --key /tmp/baseline-private.pem \
+            --out "/tmp/vua-${PROFILE}-baseline.json" \
+            --profile "$PROFILE"
+          rm -f /tmp/baseline-private.pem
+          printf '%s\n' "$REASON" > /tmp/refresh-reason.txt
+
+      - name: Verify generated baseline
+        env:
+          BASELINE_PUBLIC_KEY: ci/keys/baseline-public.pem
+          PROFILE: ${{ inputs.profile }}
+        run: |
+          node scripts/vua-baseline-attest.mjs verify \
+            --baseline "/tmp/vua-${PROFILE}-baseline.json" \
+            --key "$BASELINE_PUBLIC_KEY" \
+            --profile "$PROFILE"
+
+      - name: Upload baseline proposal for review
+        uses: actions/upload-artifact@v4
+        with:
+          name: vua-${{ inputs.profile }}-baseline-${{ github.sha }}
+          if-no-files-found: error
+          path: |
+            /tmp/vua-${{ inputs.profile }}-baseline.json
+            /tmp/metrics.json
+            /tmp/refresh-reason.txt
+
+      - name: Print promotion instructions
+        run: |
+          echo 'Baseline generated and verified.'
+          echo 'Promotion is intentionally manual: review the artifact, then commit it to ci/baselines/.'
