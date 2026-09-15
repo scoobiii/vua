@@ -82,13 +82,17 @@ jobs:
 
       - name: Compare against verified baseline
         run: |
-          node scripts/verify-performance-baseline.mjs \
-            --baseline "$BASELINE_PATH" \
-            --metrics /tmp/current-metrics.json \
-            --public-key "$BASELINE_PUBLIC_KEY" \
-            --profile "$RUNNER_PROFILE" \
-            --mobile-evidence "$MOBILE_EVIDENCE_PATH" \
+          args=(
+            --baseline "$BASELINE_PATH"
+            --metrics /tmp/current-metrics.json
+            --public-key "$BASELINE_PUBLIC_KEY"
+            --profile "$RUNNER_PROFILE"
             --result /tmp/benchmark-verdict.json
+          )
+          if test -s "$MOBILE_EVIDENCE_PATH"; then
+            args+=(--mobile-evidence "$MOBILE_EVIDENCE_PATH")
+          fi
+          node scripts/verify-performance-baseline.mjs "${args[@]}"
 
       - name: Publish benchmark evidence
         if: always()
