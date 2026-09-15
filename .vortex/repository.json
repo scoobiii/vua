@@ -1,0 +1,44 @@
+{
+  "$schema": "https://vortex.foundation/schemas/vortex.repository.v1.json",
+  "schema": "vortex.repository.v1",
+  "repository": "vuafoundation/vua",
+  "governance": {
+    "profile": "vua.repository-governance.v1",
+    "minimum_version": "1.0.0",
+    "evaluation_mode": "FAIL_CLOSED"
+  },
+  "default_branch": "main",
+  "required_workflows": [
+    "vortex-ci.yml",
+    "vortex-governance-conformance.yml",
+    "agent-patch-arena.yml",
+    "agent-patch-arena-promotion.yml",
+    "sync-conflict-resolver.yml"
+  ],
+  "required_checks": [
+    "Conformance, 100% Quality Gates & GOS3 Audit",
+    "Trusted benchmark comparison",
+    "Vortex Continuous Governance & Drift Conformance"
+  ],
+  "protected_branches": [
+    "main"
+  ],
+  "ruleset": {
+    "name": "VUA/Vortex Production Main",
+    "target": "branch",
+    "enforcement": "active",
+    "ref_name_include": [
+      "refs/heads/main"
+    ]
+  },
+  "enforcement": {
+    "force_push": false,
+    "deletion": false,
+    "pull_request_required": true,
+    "up_to_date_required": true,
+    "dismiss_stale_reviews": true,
+    "require_code_owner_review": true,
+    "required_approvals": 1,
+    "require_last_push_approval": true
+  }
+}

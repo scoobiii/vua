@@ -1,0 +1,6 @@
+{
+  "name": "VUA",
+  "description": "VUA (Vortex Universal Adapter): Motor universal de governança, conformidade criptográfica Ed25519 + RFC 8785, adaptadores multi-ambiente, livro-razão durável em Cloud Firestore e integração segura com GitHub e LLMs.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

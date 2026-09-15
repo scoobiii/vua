@@ -1,0 +1,57 @@
+{
+  "name": "vua",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "main": "./src/vortex/index.ts",
+  "bin": {
+    "vua": "./bin/vua.js"
+  },
+  "scripts": {
+    "dev": "tsx server.ts",
+    "build": "vite build && esbuild server.ts --bundle --platform=node --format=cjs --packages=external --sourcemap --outfile=dist/server.cjs",
+    "start": "node dist/server.cjs",
+    "preview": "vite preview",
+    "clean": "rm -rf dist server.js",
+    "lint": "tsc --noEmit",
+    "test": "tsx scripts/run-full-suite.ts",
+    "test:policy": "tsx tests/patch-arena-policy.test.ts",
+    "test:arena": "tsx scripts/agent-patch-arena.ts",
+    "test:threads": "tsx scripts/test-threads.ts",
+    "verify:gos3": "tsx scripts/verify-gos3-headers.ts --strict",
+    "vua": "tsx bin/vua.js",
+    "bench": "tsx bin/vua.js bench",
+    "bench:semantic": "tsx scripts/run-semantic-benchmark.ts",
+    "tao:map": "tsx scripts/tao-capability-map.ts",
+    "tao:map:quick": "VUA_TAO_QUICK=1 tsx scripts/tao-capability-map.ts",
+    "tao:compare": "tsx scripts/tao-compare.ts",
+    "vua:prove": "tsx scripts/vua-prove-equivalent.ts",
+    "vua:llms": "tsx scripts/vua-llm-resolve.ts",
+    "mcp": "tsx bin/mcp-server.js"
+  },
+  "dependencies": {
+    "@google/genai": "^2.4.0",
+    "@tailwindcss/vite": "^4.1.14",
+    "@vitejs/plugin-react": "^5.0.4",
+    "dotenv": "^17.2.3",
+    "express": "^4.21.2",
+    "firebase": "^12.19.0",
+    "lucide-react": "^0.546.0",
+    "motion": "^12.23.24",
+    "react": "^19.0.1",
+    "react-dom": "^19.0.1",
+    "swagger-ui-express": "^5.0.1",
+    "vite": "^6.2.3"
+  },
+  "devDependencies": {
+    "@types/express": "^4.17.21",
+    "@types/node": "^22.14.0",
+    "@types/swagger-ui-express": "^4.1.8",
+    "autoprefixer": "^10.4.21",
+    "esbuild": "^0.25.0",
+    "tailwindcss": "^4.1.14",
+    "tsx": "^4.21.0",
+    "typescript": "~5.8.2",
+    "vite": "^6.2.3"
+  }
+}

@@ -1,0 +1,44 @@
+[
+  {
+    "id": "gemini",
+    "name": "Gemini 3.8 Flash",
+    "provider": "google",
+    "provider_type": "cloud_api",
+    "endpoint": "https://generativelanguage.googleapis.com/v1beta",
+    "capabilities": ["text_generation", "code_execution", "multimodal", "streaming"],
+    "auth_scheme": "api_key",
+    "env_key": "GEMINI_API_KEY",
+    "model": "gemini-3.8-flash",
+    "context_window": 1048576,
+    "temperature_default": 0.2,
+    "description": "Google AI Studio / Gemini multimodal high-speed reasoning model"
+  },
+  {
+    "id": "openai",
+    "name": "OpenAI GPT-4o",
+    "provider": "openai",
+    "provider_type": "cloud_api",
+    "endpoint": "https://api.openai.com/v1",
+    "capabilities": ["text_generation", "code_generation", "function_calling"],
+    "auth_scheme": "bearer_token",
+    "env_key": "OPENAI_API_KEY",
+    "model": "gpt-4o",
+    "context_window": 128000,
+    "temperature_default": 0.2,
+    "description": "OpenAI general intelligence and code generation endpoint"
+  },
+  {
+    "id": "local-ollama",
+    "name": "Local Ollama Qwen 2.5 Coder",
+    "provider": "ollama",
+    "provider_type": "local_shell",
+    "endpoint": "http://127.0.0.1:11434",
+    "capabilities": ["text_generation", "code_generation", "offline_inference"],
+    "auth_scheme": "none",
+    "cmd": "ollama run qwen2.5-coder:0.5b",
+    "model": "qwen2.5-coder:0.5b",
+    "context_window": 32768,
+    "temperature_default": 0.2,
+    "description": "Local offline coding model running directly on device / Termux"
+  }
+]

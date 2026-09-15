@@ -1,0 +1,51 @@
+name: Vortex Foundation CI & Verification Gates
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  conformance-and-quality-gates:
+    name: Conformance, 100% Quality Gates & GOS3 Audit
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Source Code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js 22 LTS
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: 'npm'
+
+      - name: Install Dependencies
+        run: npm ci || npm install
+
+      # 1. Typecheck & Linting
+      - name: Typecheck & Static Analysis
+        run: npm run lint
+
+      # 2. GOS3 Contract Header Verification (Local & CI verifiable)
+      - name: Audit GOS3 Contract Headers
+        run: npm run verify:gos3
+
+      # 3. Production Build Compilation
+      - name: Compile Applet & Server
+        run: npm run build
+
+      # 4. Full Quality Gates: Unit, Integration (10/10), Stress, Performance, Degradation, Chaos
+      - name: Run Full Conformance Suite (100% Gate Requirement)
+        run: npm test
+
+      # 5. Execution Evidence Hash Generation & Archiving
+      - name: Archive Execution Evidence Proofs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: vortex-execution-evidence
+          path: |
+            dist/
+            metadata.json

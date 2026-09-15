@@ -1,0 +1,27 @@
+name: apply-p0-production-fix
+
+on:
+  push:
+    branches:
+      - fix/p0-mcp-verify-claude-oauth
+
+permissions:
+  contents: read
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: fix/p0-mcp-verify-claude-oauth
+          fetch-depth: 0
+
+      - name: Validate source
+        run: |
+          set -e
+          npm ci
+          npm run lint
+          npm run build
+          npx tsx scripts/test-mcp-verify-tamper.ts
+          node --check dist/server.cjs

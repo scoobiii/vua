@@ -1,0 +1,70 @@
+name: Vortex Continuous Governance & Drift Conformance
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+  schedule:
+    # Run audit every 6 hours to detect repository or ruleset drift
+    - cron: '0 */6 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pull-requests: read
+  checks: write
+
+jobs:
+  governance-conformance:
+    name: Vortex Continuous Governance & Drift Conformance
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Source Code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js 22 LTS
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: 'npm'
+
+      - name: Install Dependencies
+        run: npm ci || npm install
+
+      # 1. Audit .vortex/repository.json Contract
+      - name: Verify Vortex Repository Contract Specification
+        run: |
+          node -e "
+            const fs = require('fs');
+            const contract = JSON.parse(fs.readFileSync('.vortex/repository.json', 'utf8'));
+            if (contract.schema !== 'vortex.repository.v1') process.exit(1);
+            if (!contract.required_workflows || contract.required_workflows.length < 5) process.exit(1);
+            console.log('✅ Vortex Repository Contract valid:', contract.schema);
+          "
+
+      # 2. Audit Workflow Files Integrity
+      - name: Audit All 5 Mandatory Governance Workflows
+        run: |
+          for wf in vortex-ci.yml vortex-governance-conformance.yml agent-patch-arena.yml agent-patch-arena-promotion.yml sync-conflict-resolver.yml; do
+            if [ ! -f ".github/workflows/$wf" ]; then
+              echo "❌ Missing mandatory governance workflow: $wf"
+              exit 1
+            fi
+            echo "✅ Present: .github/workflows/$wf"
+          done
+
+      # 3. Audit Governance Documentation & CODEOWNERS
+      - name: Audit Governance Docs and CODEOWNERS
+        run: |
+          test -f CODEOWNERS || (echo "❌ CODEOWNERS is missing" && exit 1)
+          test -f docs/governance/VUA-REPOSITORY-GOVERNANCE-PROFILE-v1.md || (echo "❌ Profile doc missing" && exit 1)
+          test -f docs/agents/AGENT-ONBOARDING.md || (echo "❌ Agent onboarding missing" && exit 1)
+          echo "✅ All governance docs and CODEOWNERS verified."
+
+      # 4. Audit Ruleset Specification Artifact
+      - name: Verify Golden Ruleset Specification
+        run: |
+          test -f governance/github/VUA-VORTEX-main.ruleset.json || (echo "❌ Ruleset artifact missing" && exit 1)
+          echo "✅ VUA-VORTEX-main.ruleset.json verified."

@@ -1,0 +1,168 @@
+{
+  "entities": {
+    "User": {
+      "title": "User",
+      "description": "Authenticated user profile and agent principal identifier",
+      "type": "object",
+      "properties": {
+        "uid": {
+          "type": "string",
+          "description": "Unique Firebase authentication UID"
+        },
+        "email": {
+          "type": "string",
+          "format": "email",
+          "description": "User email address"
+        },
+        "displayName": {
+          "type": "string",
+          "description": "User display name"
+        },
+        "photoURL": {
+          "type": "string",
+          "description": "Avatar URL"
+        },
+        "role": {
+          "type": "string",
+          "enum": ["user", "admin", "agent_operator"],
+          "description": "User role in Vortex governance"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Account registration timestamp"
+        }
+      },
+      "required": ["uid", "email", "createdAt"]
+    },
+    "ExecutionProofRecord": {
+      "title": "ExecutionProofRecord",
+      "description": "Governed execution proof persisted in Firestore with Ed25519 signature",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Document ID matching execution_id"
+        },
+        "execution_id": {
+          "type": "string",
+          "description": "Unique execution identifier"
+        },
+        "proof_version": {
+          "type": "string",
+          "description": "Specification version"
+        },
+        "request_id": {
+          "type": "string",
+          "description": "Request UUID"
+        },
+        "principal_id": {
+          "type": "string",
+          "description": "Principal ID of caller or operator"
+        },
+        "owner_uid": {
+          "type": "string",
+          "description": "Firebase Auth UID of user who triggered the run"
+        },
+        "connector_id": {
+          "type": "string",
+          "description": "Connector or adapter name"
+        },
+        "operation": {
+          "type": "string",
+          "description": "Governed command or tool name"
+        },
+        "status": {
+          "type": "string",
+          "enum": ["SUCCESS", "FAILED", "BLOCKED_FAIL_CLOSED"],
+          "description": "Execution status"
+        },
+        "input_hash": {
+          "type": "string",
+          "description": "SHA-256 canonical hash of inputs"
+        },
+        "output_hash": {
+          "type": "string",
+          "description": "SHA-256 canonical hash of outputs"
+        },
+        "signature": {
+          "type": "string",
+          "description": "Ed25519 signature over canonical RFC 8785 JSON"
+        },
+        "proof_hash": {
+          "type": "string",
+          "description": "Canonical proof hash"
+        },
+        "duration_ms": {
+          "type": "number",
+          "description": "Execution elapsed time in ms"
+        },
+        "timestamp": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Proof timestamp"
+        }
+      },
+      "required": ["execution_id", "principal_id", "owner_uid", "operation", "status", "signature", "proof_hash", "timestamp"]
+    },
+    "TournamentRecord": {
+      "title": "TournamentRecord",
+      "description": "Darwinian Patch Arena tournament report with candidate diffs and scores",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Tournament ID"
+        },
+        "owner_uid": {
+          "type": "string",
+          "description": "Firebase Auth UID"
+        },
+        "verdict": {
+          "type": "string",
+          "description": "PASS_SUPERIOR or REJECT"
+        },
+        "intent": {
+          "type": "string",
+          "description": "Intent classification (PERFORMANCE, SECURITY, etc.)"
+        },
+        "score_current": {
+          "type": "number",
+          "description": "Candidate benchmark score"
+        },
+        "score_baseline": {
+          "type": "number",
+          "description": "Baseline benchmark score"
+        },
+        "delta_pct": {
+          "type": "number",
+          "description": "Percentage score change"
+        },
+        "evidence_hash": {
+          "type": "string",
+          "description": "Evidence canonical hash"
+        },
+        "created_at": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Record creation timestamp"
+        }
+      },
+      "required": ["id", "owner_uid", "verdict", "score_current", "score_baseline", "created_at"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": { "$ref": "User" },
+      "description": "User profiles and operator RBAC identity documents"
+    },
+    "/execution_proofs/{proofId}": {
+      "schema": { "$ref": "ExecutionProofRecord" },
+      "description": "Cryptographically signed execution proofs persisted by authenticated operators"
+    },
+    "/arena_tournaments/{tournamentId}": {
+      "schema": { "$ref": "TournamentRecord" },
+      "description": "Patch Arena tournament run logs and verification results"
+    }
+  }
+}

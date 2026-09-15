@@ -1,0 +1,13 @@
+# Vortex Foundation & VUA Governance CODEOWNERS
+# Mandatory review requirements enforced by GitHub Ruleset
+
+# Default global owners
+* @scoobiii
+
+# Critical Governance Artifacts - require mandatory review
+/.github/workflows/ @scoobiii
+/.vortex/ @scoobiii
+/governance/ @scoobiii
+/docs/governance/ @scoobiii
+/docs/agents/ @scoobiii
+/firestore.rules @scoobiii

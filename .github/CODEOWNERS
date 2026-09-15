@@ -1,0 +1,5 @@
+# CI/CD and governance changes require repository-owner review.
+/.github/workflows/ @scoobiii
+/.github/CODEOWNERS @scoobiii
+/scripts/agent-patch-arena.py @scoobiii
+/docs/06-agent-patch-arena-ci.md @scoobiii

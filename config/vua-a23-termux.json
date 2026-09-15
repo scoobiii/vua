@@ -1,0 +1,52 @@
+{
+  "profile": "vua-termux-a23-cpu",
+  "hardware": {
+    "soc": "Allwinner A23 Dual-Core Cortex-A7",
+    "architecture": "armv7l / 32-bit (or aarch64)",
+    "ram_target_mb": 512,
+    "gpu_acceleration": "none",
+    "thermal_governor": "powersave / balanced"
+  },
+  "inference": {
+    "backend": "llama.cpp",
+    "binary": "llama-server",
+    "gpu_layers": 0,
+    "threads": 2,
+    "batch": 32,
+    "parallel": 1,
+    "context": 768,
+    "temperature": 0,
+    "max_tokens": 128,
+    "quantization": "Q4_K_M",
+    "model_recommended": "qwen2.5-coder-0.5b-instruct.Q4_K_M.gguf",
+    "no_mmap": true
+  },
+  "governance": {
+    "policy_id": "vortex-termux-a23",
+    "policy_version": "3.0.0",
+    "sandbox_id": "sandbox-llama-local",
+    "allow_shell": false,
+    "allow_remote_write": false,
+    "require_web_for_freshness": true,
+    "require_tool_for_exact_math": true,
+    "require_tool_for_local_state": true,
+    "strict_serialization": true
+  },
+  "limits": {
+    "max_prompt_chars": 6000,
+    "max_output_tokens": 128,
+    "timeout_ms": 120000,
+    "max_concurrent_inference": 1,
+    "max_execution_log_entries": 2000
+  },
+  "connectors": {
+    "allowed": [
+      "connector:llama.cpp",
+      "math.calculate.v1",
+      "units.convert.v1",
+      "git.rev_parse",
+      "linux.filesystem.stat",
+      "web.search"
+    ]
+  }
+}

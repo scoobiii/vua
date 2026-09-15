@@ -1,0 +1,118 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // 1. Global Safety Net: Default-deny catch-all
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // 2. Reusable Hardened Primitives
+    function isValidId(id) {
+      return id is string && id.size() > 0 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isVerifiedUser() {
+      return isSignedIn() && (request.auth.token.email_verified == true || request.auth.token.firebase.sign_in_provider == 'google.com');
+    }
+
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    function isAdmin() {
+      return isSignedIn() && (
+        request.auth.token.role == 'admin' ||
+        exists(/databases/$(database)/documents/admins/$(request.auth.uid))
+      );
+    }
+
+    // 3. Entity Validation Helpers
+    function isValidUser(data) {
+      return data.keys().hasAll(['uid', 'email', 'createdAt']) &&
+        data.uid is string && data.uid.size() > 0 && data.uid.size() <= 128 && data.uid == request.auth.uid &&
+        data.email is string && data.email.size() <= 256 &&
+        data.createdAt is string && data.createdAt.size() <= 64 &&
+        (!('displayName' in data) || (data.displayName is string && data.displayName.size() <= 128)) &&
+        (!('photoURL' in data) || (data.photoURL is string && data.photoURL.size() <= 1024)) &&
+        (!('role' in data) || (data.role in ['user', 'admin', 'agent_operator']));
+    }
+
+    function isValidProof(data) {
+      return data.keys().hasAll(['execution_id', 'principal_id', 'owner_uid', 'operation', 'status', 'signature', 'proof_hash', 'timestamp']) &&
+        data.execution_id is string && data.execution_id.size() > 0 && data.execution_id.size() <= 128 &&
+        data.principal_id is string && data.principal_id.size() <= 128 &&
+        data.owner_uid is string && data.owner_uid == request.auth.uid &&
+        data.operation is string && data.operation.size() <= 128 &&
+        data.status in ['SUCCESS', 'FAILED', 'BLOCKED_FAIL_CLOSED'] &&
+        data.signature is string && data.signature.size() <= 2048 &&
+        data.proof_hash is string && data.proof_hash.size() <= 256 &&
+        data.timestamp is string && data.timestamp.size() <= 64 &&
+        (!('input_hash' in data) || (data.input_hash is string && data.input_hash.size() <= 256)) &&
+        (!('output_hash' in data) || (data.output_hash is string && data.output_hash.size() <= 256)) &&
+        (!('proof_version' in data) || (data.proof_version is string && data.proof_version.size() <= 32)) &&
+        (!('request_id' in data) || (data.request_id is string && data.request_id.size() <= 128)) &&
+        (!('connector_id' in data) || (data.connector_id is string && data.connector_id.size() <= 64)) &&
+        (!('duration_ms' in data) || (data.duration_ms is number && data.duration_ms >= 0 && data.duration_ms <= 3600000));
+    }
+
+    function isValidTournament(data) {
+      return data.keys().hasAll(['id', 'owner_uid', 'verdict', 'score_current', 'score_baseline', 'created_at']) &&
+        data.id is string && data.id.size() > 0 && data.id.size() <= 128 &&
+        data.owner_uid is string && data.owner_uid == request.auth.uid &&
+        data.verdict is string && data.verdict.size() <= 64 &&
+        data.score_current is number && data.score_current >= 0 &&
+        data.score_baseline is number && data.score_baseline >= 0 &&
+        data.created_at is string && data.created_at.size() <= 64 &&
+        (!('intent' in data) || (data.intent is string && data.intent.size() <= 64)) &&
+        (!('delta_pct' in data) || (data.delta_pct is number)) &&
+        (!('evidence_hash' in data) || (data.evidence_hash is string && data.evidence_hash.size() <= 256));
+    }
+
+    // 4. Collection Rules
+
+    // Users Collection (PII Isolated)
+    match /users/{userId} {
+      allow get: if isSignedIn() && (isOwner(userId) || isAdmin());
+      allow list: if isAdmin();
+      allow create: if isSignedIn() && isOwner(userId) && isValidId(userId) && isValidUser(incoming()) && (
+        !('role' in incoming()) || incoming().role == 'user' || isAdmin()
+      );
+      allow update: if isSignedIn() && isOwner(userId) && isValidId(userId) && isValidUser(incoming()) &&
+        incoming().uid == existing().uid &&
+        incoming().createdAt == existing().createdAt &&
+        (!('role' in incoming()) || incoming().role == existing().role || isAdmin());
+      allow delete: if isAdmin();
+    }
+
+    // Execution Proofs Collection (Immutable Audited Ledger)
+    match /execution_proofs/{proofId} {
+      allow get: if isSignedIn() && isValidId(proofId) && (existing().owner_uid == request.auth.uid || isAdmin());
+      allow list: if isSignedIn() && (resource.data.owner_uid == request.auth.uid || isAdmin());
+      allow create: if isVerifiedUser() && isValidId(proofId) && isValidProof(incoming()) && incoming().owner_uid == request.auth.uid;
+      allow update: if false; // Immutable audit trail
+      allow delete: if isAdmin();
+    }
+
+    // Patch Arena Tournaments Collection
+    match /arena_tournaments/{tournamentId} {
+      allow get: if isSignedIn() && isValidId(tournamentId) && (existing().owner_uid == request.auth.uid || isAdmin());
+      allow list: if isSignedIn() && (resource.data.owner_uid == request.auth.uid || isAdmin());
+      allow create: if isSignedIn() && isValidId(tournamentId) && isValidTournament(incoming()) && incoming().owner_uid == request.auth.uid;
+      allow update: if false; // Immutable tournament log
+      allow delete: if isAdmin();
+    }
+  }
+}

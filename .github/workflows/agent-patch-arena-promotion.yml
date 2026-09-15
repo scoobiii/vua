@@ -1,0 +1,91 @@
+name: Agent Patch Arena — Promotion
+
+on:
+  workflow_run:
+    workflows: ["Agent Patch Arena — Benchmark Gate"]
+    types: [completed]
+
+permissions:
+  actions: read
+  contents: write
+  pull-requests: write
+
+jobs:
+  promote:
+    name: Promote benchmark-superior patch
+    if: ${{ github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'pull_request_target' && github.event.workflow_run.pull_requests[0].number != null }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Download immutable Arena evidence
+        uses: actions/download-artifact@v4
+        with:
+          name: agent-patch-arena-${{ github.event.workflow_run.pull_requests[0].number }}-${{ github.event.workflow_run.head_sha }}
+          path: ${{ runner.temp }}/arena
+          run-id: ${{ github.event.workflow_run.id }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Validate evidence and PR identity
+        env:
+          PR_NUMBER: ${{ github.event.workflow_run.pull_requests[0].number }}
+          RUN_HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
+          REPO: ${{ github.repository }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json, os, pathlib
+          p = pathlib.Path(os.environ['RUNNER_TEMP']) / 'arena' / 'arena-result.json'
+          result = json.loads(p.read_text())
+          required = ['schema', 'base_sha', 'head_sha', 'verdict', 'quality']
+          missing = [k for k in required if k not in result]
+          if missing:
+              raise SystemExit(f'Missing evidence fields: {missing}')
+          if result['schema'] != 'vortex.patch-arena.v1':
+              raise SystemExit('Unsupported Arena evidence schema')
+          if result['head_sha'] != os.environ['RUN_HEAD_SHA']:
+              raise SystemExit('Evidence head SHA does not match workflow head SHA')
+          if result['verdict'] != 'PASS_SUPERIOR':
+              raise SystemExit('Arena verdict is not PASS_SUPERIOR')
+          if not result['quality'].get('passed'):
+              raise SystemExit('Absolute quality gates did not pass')
+          print(json.dumps(result, indent=2))
+          PY
+
+          PR_JSON="$(gh pr view "$PR_NUMBER" --repo "$REPO" --json number,state,isDraft,baseRefName,baseRefOid,headRefOid,mergeStateStatus)"
+          export PR_JSON
+          python3 - <<'PY'
+          import json, os
+          pr = json.loads(os.environ['PR_JSON'])
+          with open(os.path.join(os.environ['RUNNER_TEMP'], 'arena', 'arena-result.json'), encoding='utf-8') as f:
+              result = json.load(f)
+          if pr['state'] != 'OPEN':
+              raise SystemExit('PR is not open')
+          if pr['isDraft']:
+              raise SystemExit('PR is still draft')
+          if pr['baseRefName'] != 'main':
+              raise SystemExit('PR base is not main')
+          if pr['headRefOid'] != result['head_sha']:
+              raise SystemExit('PR head changed after benchmark; refusing promotion')
+          if pr['baseRefOid'] != result['base_sha']:
+              raise SystemExit('main advanced after benchmark; refusing promotion and requiring a fresh Arena run')
+          if pr['mergeStateStatus'] == 'DIRTY':
+              raise SystemExit('PR has merge conflicts; refusing promotion')
+          PY
+
+      - name: Enable protected auto-merge
+        env:
+          PR_NUMBER: ${{ github.event.workflow_run.pull_requests[0].number }}
+          HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
+          REPO: ${{ github.repository }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh pr merge "$PR_NUMBER" --repo "$REPO" --auto --squash --match-head-commit "$HEAD_SHA"
+
+      - name: Record promotion decision
+        env:
+          PR_NUMBER: ${{ github.event.workflow_run.pull_requests[0].number }}
+          REPO: ${{ github.repository }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh pr comment "$PR_NUMBER" --repo "$REPO" --body "Vortex Agent Patch Arena: PASS_SUPERIOR. Absolute gates passed and the candidate demonstrated the required measured benchmark gain against the exact base SHA. Protected auto-merge enabled; GitHub will still enforce required reviews/checks/merge queue."
