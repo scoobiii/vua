@@ -66,12 +66,189 @@ O VUA implementa o fluxo completo de modificação e governança de código:
 Documentação completa e estruturada disponível no repositório:
 
 - 📖 [**docs/README.md**](./docs/README.md) — Índice mestre e arquitetura geral.
+- 🛡️ [**docs/MANUAL-DE-SEGURANCA.md**](./docs/MANUAL-DE-SEGURANCA.md) — **Novo**: Manual oficial de segurança, gestão de PAT volátil, anti-replay e criptografia Ed25519.
+- 🌐 [**docs/VUA-PRODUTOS-SERVICOS-POR-INDUSTRIA.md**](./docs/VUA-PRODUTOS-SERVICOS-POR-INDUSTRIA.md) — **Novo**: Catálogo de produtos, dores resolvidas por LLM, Web3 e monetização.
 - 📦 [**docs/01-visao-geral-e-instalacao.md**](./docs/01-visao-geral-e-instalacao.md) — Instalação, CLI `vua`, biblioteca npm e diagnósticos.
 - 📱 [**docs/02-mobile-apk-sem-github.md**](./docs/02-mobile-apk-sem-github.md) — **Passo 2**: APK Android (`com.vortex.foundation.vua`), isolamento SELinux/Scoped Storage, funcionamento mobile offline sem conector GitHub.
 - 🤖 [**docs/03-llm-browser-e-qwen-gemini.md**](./docs/03-llm-browser-e-qwen-gemini.md) — **Passo 3**: LLM no navegador (WebGPU/Wasm), Qwen 2.5 Coder 0.5B local/offline e Google Gemini com API Key protegida.
 - ⚡ [**docs/04-termux-e-alpine-proot.md**](./docs/04-termux-e-alpine-proot.md) — Execução em Termux, Alpine Linux (PRoot), benchmarks de latência (<370µs) e throughput (2.700+ ops/seg).
 - 🔌 [**docs/05-adapters-local-vs-github-remoto.md**](./docs/05-adapters-local-vs-github-remoto.md) — Comparativo GitHub App Remota vs. Adaptadores locais (Linux, Android, Windows, MCP para Cursor/Claude/VSCode).
 - 🛡️ [**docs/governance/BASELINE-TOLERANCE-REPORT.md**](./docs/governance/BASELINE-TOLERANCE-REPORT.md) — Baseline dinâmica por fingerprint de hardware, separação entre indução e autorização, e conformidade de 14 gates (100% PASS).
+
+---
+
+## 💻 Instalação Multiplataforma (NPM, CLI, Binário/EXE e Navegador)
+
+### 1. Via NPM Direto no CLI (Global ou NPX)
+O VUA pode ser executado instantaneamente sem necessidade de clonar o repositório:
+
+```bash
+# Execução direta e efêmera via npx:
+npx @vortexfoundation/vua status
+npx @vortexfoundation/vua baseline
+
+# Instalação global do comando 'vua':
+npm install -g @vortexfoundation/vua
+vua status
+vua adapters
+```
+
+### 2. Instalação e Uso no Windows (PowerShell / CMD / WSL2)
+```powershell
+# No PowerShell ou CMD com Node.js instalado:
+npm install -g @vortexfoundation/vua
+vua status
+
+# Iniciar servidor MCP local no Windows:
+vua mcp --port 3000
+```
+
+#### Como Executável Nativo Windows (.exe) ou Serviço em Segundo Plano:
+Para ambientes Windows corporativos sem Node.js instalado, compile ou empacote via `pkg`:
+```bash
+# Compilar binário Windows autocontido:
+npx @yao-pkg/pkg dist/server.cjs --targets node22-win-x64 --output vua-service.exe
+
+# Executar o binário nativo no Windows:
+.\vua-service.exe
+```
+Para conectar aplicativos do Windows (PowerShell, scripts C#, agentes locais), comunique-se via HTTP/SSE em `http://localhost:3000/mcp` ou configure como Serviço do Windows usando `sc.exe create VuaService binPath= "C:\vua\vua-service.exe"`.
+
+### 3. Instalação no Linux e macOS
+```bash
+# Linux (Ubuntu, Debian, Fedora, Alpine):
+curl -fsSL https://deb.nodesource.com/setup_22.x | sudo -E bash -
+sudo apt-get install -y nodejs
+npm install -g @vortexfoundation/vua
+vua baseline
+
+# macOS (via Terminal ou Homebrew):
+brew install node
+npm install -g @vortexfoundation/vua
+vua status
+```
+
+### 4. Instalação a Partir do Navegador (PWA / Web App Autônomo)
+O VUA é um Progressive Web App (PWA) de arquitetura moderna:
+1. Abra a aplicação em qualquer navegador moderno (Chrome, Edge, Safari, Firefox).
+2. Na barra de endereços, clique no ícone **"Instalar aplicativo"** (ou no menu do navegador $\to$ *"Instalar VUA Governança"*).
+3. No Android/Chrome: toque em *"Adicionar à tela inicial"*. O app roda em janela autônoma isolada com suporte a Web Workers, armazenamento volátil e conexão com endpoints MCP locais (`localhost:3000`).
+
+---
+
+## 🤖 Como Cada App LLM e Agente Configura e Usa o VUA
+
+O VUA disponibiliza um servidor **Model Context Protocol (MCP)** nos endpoints `http://localhost:3000/mcp` (HTTP POST) e `http://localhost:3000/sse` (Server-Sent Events).
+
+### 1. Claude Desktop (Anthropic)
+Edite seu arquivo de configuração `claude_desktop_config.json`:
+- **macOS**: `~/Library/Application Support/Claude/claude_desktop_config.json`
+- **Windows**: `%APPDATA%\Claude\claude_desktop_config.json`
+
+```json
+{
+  "mcpServers": {
+    "vua-governance": {
+      "command": "npx",
+      "args": ["-y", "@vortexfoundation/vua", "mcp"]
+    }
+  }
+}
+```
+*Após reiniciar o Claude Desktop, as 5 ferramentas (`vortex.inspect`, `vortex.propose`, `vortex.verify`, `vortex.execute`, `vortex.branch.write`) estarão ativas.*
+
+### 2. Cursor IDE
+No Cursor, acesse **Cursor Settings $\to$ Features $\to$ MCP Servers $\to$ Add New MCP Server**:
+- **Name**: `vua-governance`
+- **Type**: `command`
+- **Command**: `npx -y @vortexfoundation/vua mcp`
+
+*(Ou configure como SSE com URL `http://localhost:3000/sse` se o servidor estiver rodando localmente).*
+
+### 3. VSCode (Extensões Cline, Roo Code ou Continue.dev)
+No arquivo `cline_mcp_settings.json` ou similar:
+```json
+{
+  "mcpServers": {
+    "vua": {
+      "command": "node",
+      "args": ["/caminho/para/vua/bin/mcp-server.js"]
+    }
+  }
+}
+```
+
+### 4. Ollama & Qwen 2.5 Coder (100% Offline & Local)
+Para usar modelos open source locais através da governança do VUA:
+```bash
+# Baixar o modelo no Ollama:
+ollama pull qwen2.5-coder:0.5b
+
+# Executar inferência governada com prova Ed25519:
+vua llm --provider ollama --model qwen2.5-coder:0.5b --prompt "Crie uma função de validação de CPF"
+```
+
+### 5. Google Gemini API
+Com sua `GEMINI_API_KEY` configurada no ambiente:
+```bash
+export GEMINI_API_KEY="sua_chave_aqui"
+vua llm --provider gemini --model gemini-3.8-flash --prompt "Explique as leis do VUA"
+```
+
+### 6. Agentes Python (LangChain, LlamaIndex, AutoGen)
+Conecte qualquer agente Python consumindo a API REST padronizada do VUA:
+```python
+import requests
+
+# Invocando inspeção governada
+response = requests.post("http://localhost:3000/api/vortex/pipeline", json={
+    "request_id": "req-py-001",
+    "operation": "inspect",
+    "target": {"path": "/workspace/vortex/README.md"}
+})
+
+data = response.json()
+print("Status:", data["status"])
+print("Ed25519 Signature:", data["execution_proof"]["signature"])
+```
+
+---
+
+## ⚡ Bootstrap Dinâmico: Auto-Configuração de Baseline por Gadget/Dispositivo
+
+O VUA implementa a detecção de hardware em tempo real para auto-configurar a baseline de governança sem intervenção humana:
+
+```bash
+# Executar a auto-configuração de baseline:
+vua baseline
+```
+
+### Arquétipos Suportados e Ajustes Automáticos:
+1. **`MOBILE_TERMUX` (Smartphones Android / Termux)**:
+   - SLA Ed25519: $\le 3.5\text{ ms}$ (Tolerância a jitter: $\pm 35\%$).
+   - Concorrência Máxima: 1 thread.
+   - Modelo Local Recomendado: `qwen2.5-coder:0.5b` (Q4_K_M).
+   - Teto Sandbox RAM: 256 MB.
+
+2. **`EMBEDDED_EDGE` (Raspberry Pi, SBCs ARM64)**:
+   - SLA Ed25519: $\le 2.0\text{ ms}$ (Tolerância: $\pm 25\%$).
+   - Concorrência Máxima: 2 threads.
+   - Modelo Local Recomendado: `qwen2.5-coder:1.5b` (Q4_K_M).
+   - Teto Sandbox RAM: 512 MB.
+
+3. **`DESKTOP_DEV` (Laptops e Workstations x64/M1/M2/M3)**:
+   - SLA Ed25519: $\le 0.8\text{ ms}$ (Tolerância: $\pm 10\%$).
+   - Concorrência Máxima: 4 threads.
+   - Modelo Local Recomendado: `qwen2.5-coder:7b` (Q4_K_M).
+   - Teto Sandbox RAM: 1024 MB.
+
+4. **`HIGH_PERF_CLOUD` (Instâncias Cloud / Servidores Corporativos)**:
+   - SLA Ed25519: $\le 0.5\text{ ms}$ (Tolerância: $\pm 5\%$).
+   - Concorrência Máxima: 4 a 16 threads.
+   - Modelo Local Recomendado: `qwen2.5-coder:14b` (fp16).
+   - Teto Sandbox RAM: 2048 MB.
+
+---
 
 ---
 

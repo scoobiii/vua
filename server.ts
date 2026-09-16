@@ -34,6 +34,7 @@ import {
 } from './src/vortex/firebase-auth.js';
 import { RepositoryBootstrapper } from './src/repository/bootstrap/RepositoryBootstrapper.js';
 import { mountOAuth, requireBearer } from './src/vortex/oauth.js';
+import { bootstrapHardwareBaseline, detectHardwareFingerprint, computeDynamicBaseline } from './src/vortex/hardware-profiler.js';
 
 const PORT = Number(process.env.PORT || 3000);
 const configuredPublicBase = (process.env.PUBLIC_BASE_URL || process.env.APP_URL || '').replace(/\/$/, '');
@@ -363,6 +364,22 @@ async function startServer() {
       thesis: 'SAFETY = AUTHORIZATION + BOUNDED EXECUTION + ACCOUNTABILITY + INDEPENDENT VERIFICATION + IDENTITY',
       node_version: process.version,
     });
+  });
+
+  // Dynamic Hardware Baseline & Device Fingerprint Certificate
+  app.get('/api/vua/baseline/hardware', async (req, res) => {
+    try {
+      const cert = await bootstrapHardwareBaseline();
+      res.json({
+        success: true,
+        certificate: cert,
+      });
+    } catch (err: any) {
+      res.status(500).json({
+        success: false,
+        error: err.message || 'Falha ao gerar baseline dinâmica de hardware',
+      });
+    }
   });
 
   // 2. Well-known Key Discovery (RFC Well-Known)

@@ -22,3 +22,4 @@ export * from './llm.js';
 export * from './conformance.js';
 export * from './adapters/index.js';
 export * from './semantic-oracle.js';
+export * from './hardware-profiler.js';

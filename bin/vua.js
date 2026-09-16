@@ -23,6 +23,7 @@ import { canonicalizeRFC8785 } from '../src/vortex/canonicalize.js';
 import { generateVortexIdentity, signProofPayload, verifyProofSignature } from '../src/vortex/crypto.js';
 import { handleMCPMessage } from '../src/vortex/mcp-server.js';
 import { RepositoryBootstrapper } from '../src/repository/bootstrap/RepositoryBootstrapper.js';
+import { detectHardwareFingerprint, computeDynamicBaseline, bootstrapHardwareBaseline } from '../src/vortex/hardware-profiler.js';
 
 const args = process.argv.slice(2);
 const command = args[0] || 'help';
@@ -42,7 +43,8 @@ Uso:
   vua <comando> [opções]
 
 Comandos Principais:
-  vua status                    Exibe diagnósticos do ambiente (Termux, Alpine, HW, RAM)
+  vua status                    Exibe diagnósticos do ambiente (Termux, Alpine, HW, RAM, Baseline)
+  vua baseline                  Gera auto-configuração de baseline dinâmica para este gadget/dev
   vua adapters                  Lista os adaptadores registrados (Linux, Android, Windows, GitHub)
   vua invoke <adapter> <action> Executa uma ação normatizada num adaptador com prova Ed25519
   vua bench                     Roda benchmark de desempenho e latência local (ops/sec, crypto)
@@ -82,18 +84,42 @@ Exemplos de Uso:
 
 async function handleStatus() {
   printBanner();
-  const memTotalMB = (os.totalmem() / 1024 / 1024).toFixed(0);
-  const memFreeMB = (os.freemem() / 1024 / 1024).toFixed(0);
-  const isTermux = Boolean(process.env.TERMUX_VERSION || process.env.PREFIX?.includes('com.termux'));
-  const isAlpine = fs.existsSync('/etc/alpine-release');
+  const fingerprint = detectHardwareFingerprint();
+  const baseline = computeDynamicBaseline(fingerprint);
 
-  console.log(`Diagnósticos de Sistema:`);
-  console.log(`  • Ambiente Especial : ${isTermux ? '📱 Termux (Android)' : isAlpine ? '🏔️ Alpine Linux' : '💻 Standard POSIX/NT'}`);
-  console.log(`  • CPUs              : ${os.cpus().length} núcleos (${os.cpus()[0]?.model || 'Generic'})`);
-  console.log(`  • Memória RAM       : ${memFreeMB} MB livre de ${memTotalMB} MB total`);
-  console.log(`  • Process Architecture: ${process.arch} (${process.platform})`);
+  console.log(`Diagnósticos de Sistema & Hardware Profile:`);
+  console.log(`  • Arquétipo Gadget  : 🎯 [${fingerprint.archetype}]`);
+  console.log(`  • Plataforma        : ${fingerprint.platform} (${fingerprint.architecture})`);
+  console.log(`  • Ambiente Especial : ${fingerprint.isTermux ? '📱 Termux (Android Mobile)' : fingerprint.isAlpine ? '🏔️ Alpine Linux' : fingerprint.isWSL ? '🐧 WSL2 no Windows' : '💻 Standard POSIX/NT'}`);
+  console.log(`  • CPUs              : ${fingerprint.cpuCores} núcleos (${fingerprint.cpuModel})`);
+  console.log(`  • Memória RAM       : ${fingerprint.freeMemoryMB} MB livre de ${fingerprint.totalMemoryMB} MB total`);
   console.log(`  • Gemini API Key    : ${process.env.GEMINI_API_KEY ? 'Configurada [OK]' : 'Ausente (usará modo offline/local)'}`);
   console.log(`  • Adaptadores VUA   : 4 Ativos (github, linux, android, windows)`);
+  console.log(`\nBaseline Dinâmica de Tolerância:`);
+  console.log(`  • SLA Assinatura Ed25519: ${baseline.cryptoSignTargetMs} ms (Tolerância: ±${baseline.jitterTolerancePercent}%)`);
+  console.log(`  • SLA Canônico RFC 8785 : ${baseline.canonicalizeTargetMs} ms`);
+  console.log(`  • Concorrência Máxima   : ${baseline.maxConcurrentOperations} threads simultâneas`);
+  console.log(`  • Recomendação LLM Local: ${baseline.recommendedLocalModel} (${baseline.recommendedModelQuantization})`);
+  console.log(`  • Limite Sandbox RAM    : ${baseline.sandboxMemoryLimitMB} MB`);
+}
+
+async function handleBaseline() {
+  printBanner();
+  console.log(`⚡ Gerando Certificado de Auto-Configuração Baseline Dinâmica...`);
+  const cert = await bootstrapHardwareBaseline();
+  console.log(`\n═════════════════════════════════════════════════════════════`);
+  console.log(`STATUS: ✅ BASELINE DINÂMICA ESTABELECIDA`);
+  console.log(`ARQUÉTIPO: ${cert.fingerprint.archetype}`);
+  console.log(`═════════════════════════════════════════════════════════════`);
+  console.log(`  • Dispositivo       : ${cert.fingerprint.cpuModel} (${cert.fingerprint.cpuCores} núcleos, ${cert.fingerprint.totalMemoryMB} MB RAM)`);
+  console.log(`  • Tolerância Jitter : ±${cert.baseline.jitterTolerancePercent}%`);
+  console.log(`  • SLA Ed25519       : ${cert.baseline.cryptoSignTargetMs} ms`);
+  console.log(`  • Limite Concorrência: ${cert.baseline.maxConcurrentOperations}`);
+  console.log(`  • Modelo Indicado   : ${cert.baseline.recommendedLocalModel} (${cert.baseline.recommendedModelQuantization})`);
+  console.log(`  • RFC 8785 Hash     : ${cert.canonical_hash}`);
+  console.log(`  • Assinado por      : ${cert.signed_by}`);
+  console.log(`  • Assinatura Ed25519: ${cert.signature.substring(0, 32)}...`);
+  console.log(`═════════════════════════════════════════════════════════════\n`);
 }
 
 async function handleAdapters() {
@@ -420,6 +446,10 @@ switch (command) {
     break;
   case 'status':
     handleStatus();
+    break;
+  case 'baseline':
+  case 'bootstrap:hw':
+    handleBaseline();
     break;
   case 'adapters':
     handleAdapters();
