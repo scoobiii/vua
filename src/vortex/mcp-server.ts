@@ -76,16 +76,19 @@ export const VORTEX_MCP_TOOLS: MCPToolDefinition[] = [
       type: 'object',
       properties: {
         request_id: { type: 'string' },
+        proof: { type: 'object', description: 'The ExecutionProof v1 object to verify' },
+        execution_proof: { type: 'object', description: 'Alias for proof' },
         input: {
           type: 'object',
           properties: {
             execution_proof: { type: 'object' },
+            proof: { type: 'object' },
             expected_hash: { type: 'string' },
           },
         },
         authorization: { type: 'object' },
       },
-      required: ['request_id', 'input'],
+      required: ['request_id'],
     },
   },
   {

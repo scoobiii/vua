@@ -90,6 +90,25 @@ export function verifyExecutionProof(
   }
 
   // 4. Hashes Verification
+  // Check proof_hash against sha256(canonicalString)
+  const expectedProofHash = `sha256:${sha256(canonicalString).replace(/^sha256:/, '')}`;
+  if (!proof.proof_hash || typeof proof.proof_hash !== 'string') {
+    checks.proof_hash = { passed: false, message: 'Missing proof_hash in proof' };
+    reasons.push('Missing proof_hash (must be sha256:hex)');
+  } else if (proof.proof_hash !== expectedProofHash) {
+    checks.proof_hash = {
+      passed: false,
+      message: `proof_hash mismatch: recalculated ${expectedProofHash} != declared ${proof.proof_hash}`,
+    };
+    reasons.push('PROOF_HASH_INVALID: recalculated JCS hash does not match declared proof_hash');
+  } else {
+    checks.proof_hash = {
+      passed: true,
+      message: 'proof_hash matches recalculation over canonical JCS byte sequence',
+      details: { proof_hash: proof.proof_hash },
+    };
+  }
+
   const isInputHashValid = typeof proof.input_hash === 'string' && proof.input_hash.startsWith('sha256:');
   if (!isInputHashValid) {
     checks.input_hash = { passed: false, message: `Invalid input_hash format: ${proof.input_hash}` };
