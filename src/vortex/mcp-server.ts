@@ -9,10 +9,12 @@
  * - vortex.branch.write: Persistent development branch modification with human approval
  */
 
-import { executeVortexPipeline } from './gateway.js';
+import { executeVortexPipeline, createSignedProof } from './gateway.js';
 import { executeGovernedLLM, type LLMConfig, type LLMProviderType } from './llm.js';
 import { vuaRegistry } from './adapters/registry.js';
-import type { VortexOperation, VortexRequest, VortexResponse } from './types.js';
+import { verifyExecutionProof } from './verifier.js';
+import { sha256 } from './crypto.js';
+import type { ExecutionProof, VortexOperation, VortexRequest, VortexResponse } from './types.js';
 
 export interface MCPToolDefinition {
   name: string;
@@ -334,10 +336,103 @@ export async function handleMCPMessage(message: {
       }
     }
 
+    if (toolName === 'vortex.verify') {
+      const inputObj = (args.input as Record<string, unknown>) || {};
+      const proofToVerify = (args.proof ||
+        args.execution_proof ||
+        inputObj.proof ||
+        inputObj.execution_proof ||
+        (args.signature ? args : undefined)) as ExecutionProof | undefined;
+
+      if (!proofToVerify) {
+        return {
+          jsonrpc: '2.0',
+          id,
+          result: {
+            status: 'VERIFICATION_FAILED',
+            output: {
+              verified: false,
+              verification_scope: 'none',
+              tamper_evident: false,
+              rfc8785_canonical: false,
+              reasons: ['No execution proof provided in arguments (expected "proof" or "execution_proof")'],
+            },
+            error: {
+              code: 'PROOF_MISSING',
+              message: 'Missing proof object in arguments to vortex.verify',
+            },
+          },
+        };
+      }
+
+      const options = {
+        embeddedPublicKey: (args.public_key as string) || (args.embeddedPublicKey as string),
+        expectedInputHash: (args.expected_input_hash as string) || (inputObj.expected_hash as string),
+        expectedOutputHash: args.expected_output_hash as string,
+      };
+
+      const verification = verifyExecutionProof(proofToVerify, options);
+      const isVerified = verification.valid === true;
+
+      const verifierInputHash = sha256(proofToVerify);
+      const verifierOutputHash = sha256({
+        valid: verification.valid,
+        status: verification.status,
+        reasons: verification.reasons,
+        checks: verification.checks,
+      });
+
+      const verificationProof = createSignedProof({
+        request_id: (args.request_id as string) || `req-mcp-${Date.now()}`,
+        execution_id: `exec-${Date.now()}-${Math.random().toString(36).substring(2, 8)}`,
+        runtime_id: 'vortex-runtime-node22-hardened',
+        agent_id: 'agent/vortex-verifier',
+        principal_id: 'scoobiii',
+        connector_id: 'connector:governed-runtime',
+        operation: 'verify',
+        execution_kind: 'capability',
+        executed: true,
+        status: isVerified ? 'EXECUTION_SUCCESS' : 'VERIFICATION_FAILED',
+        input_hash: verifierInputHash,
+        output_hash: verifierOutputHash,
+        started_at: new Date().toISOString(),
+        completed_at: new Date().toISOString(),
+        duration_ms: 3,
+        policy_id: 'vortex-development',
+        policy_version: '1.0.0',
+        gos3_session_id: `gos3-sess-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`,
+        sandbox_id: 'sandbox-isolated-env',
+      });
+
+      return {
+        jsonrpc: '2.0',
+        id,
+        result: {
+          status: isVerified ? 'EXECUTION_SUCCESS' : 'VERIFICATION_FAILED',
+          output: {
+            verified: isVerified,
+            verification_scope: isVerified ? 'full' : 'rejected',
+            tamper_evident: true,
+            rfc8785_canonical: verification.checks?.canonicalization?.passed ?? false,
+            reasons: verification.reasons,
+            checks: verification.checks,
+          },
+          ...(isVerified
+            ? {}
+            : {
+                error: {
+                  code: 'TAMPER_DETECTED',
+                  message: `Cryptographic proof verification failed: ${verification.reasons.join('; ')}`,
+                },
+              }),
+          execution_proof: verificationProof,
+        },
+      };
+    }
+
     let operation: VortexOperation = 'execute';
     if (toolName === 'vortex.inspect') operation = 'inspect';
     else if (toolName === 'vortex.propose') operation = 'propose';
-    else if (toolName === 'vortex.verify') operation = 'verify';
     else if (toolName === 'vortex.branch.write') operation = 'branch.write';
     else if (toolName === 'vortex.execute') operation = 'execute';
     else {

@@ -19,6 +19,7 @@ import { generateVortexIdentity, KEY_REGISTRY, sha256, signProofPayload, signCan
 import { getOrCreateGOS3Session, validateGOS3Session } from './gos3.js';
 import { evaluatePolicy } from './policy.js';
 import { DEFAULT_SANDBOX_LIMITS, validateCredentialScope, validateFilesystemScope } from './sandbox.js';
+import { verifyExecutionProof } from './verifier.js';
 import type {
   ExecutionProof,
   VortexOperation,
@@ -447,13 +448,27 @@ async function invokeGovernedConnector(
         requires_review: true,
       };
 
-    case 'verify':
+    case 'verify': {
+      const proofToVerify = (input?.proof || input?.execution_proof || (target as any)?.proof || (input?.status ? input : undefined)) as ExecutionProof | undefined;
+      if (proofToVerify && typeof proofToVerify === 'object' && proofToVerify.signature) {
+        const verification = verifyExecutionProof(proofToVerify);
+        return {
+          verified: verification.valid,
+          verification_scope: verification.valid ? (input?.scope || 'full') : 'rejected',
+          tamper_evident: true,
+          rfc8785_canonical: verification.checks.canonicalization.passed,
+          reasons: verification.reasons,
+          checks: verification.checks,
+        };
+      }
       return {
-        verified: true,
-        verification_scope: input?.scope || 'full',
-        tamper_evident: true,
-        rfc8785_canonical: true,
+        verified: false,
+        verification_scope: 'none',
+        tamper_evident: false,
+        rfc8785_canonical: false,
+        reasons: ['No valid execution proof supplied to verify'],
       };
+    }
 
     case 'branch.write':
       return {
