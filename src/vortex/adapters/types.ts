@@ -12,7 +12,7 @@
 
 import type { ExecutionProof, ExternalEffect, VerificationResult } from '../types.js';
 
-export type VUAAdapterId = 'github' | 'linux' | 'android' | 'windows' | 'canary';
+export type VUAAdapterId = 'github' | 'linux' | 'android' | 'windows' | 'bluesky' | 'canary';
 
 export type VUAAdapterStatus = 'online' | 'ready' | 'simulated' | 'degraded';
 
@@ -29,7 +29,7 @@ export interface VUAActionMetadata {
 export interface VUAAdapterMetadata {
   id: VUAAdapterId;
   name: string;
-  environment: 'Cloud VCS' | 'POSIX Linux' | 'AOSP Android' | 'Win32/NT Windows' | 'test';
+  environment: 'Cloud VCS' | 'POSIX Linux' | 'AOSP Android' | 'Win32/NT Windows' | 'AT Protocol / Bluesky' | 'test';
   version: string;
   status: VUAAdapterStatus;
   description: string;

@@ -158,7 +158,7 @@ export const VORTEX_MCP_TOOLS: MCPToolDefinition[] = [
   },
   {
     name: 'vua.adapters.list',
-    description: 'Lists all available VUA (Vortex Universal Connector) platform adapters (GitHub, Linux, Android, Windows) and their supported actions.',
+    description: 'Lists all available VUA (Vortex Universal Connector) platform adapters (GitHub, Linux, Android, Windows, Bluesky) and their supported actions.',
     inputSchema: {
       type: 'object',
       properties: {},
@@ -167,18 +167,18 @@ export const VORTEX_MCP_TOOLS: MCPToolDefinition[] = [
   },
   {
     name: 'vua.adapter.invoke',
-    description: 'Invokes a governed action on a VUA Universal Adapter (GitHub, Linux, Android, or Windows) with cryptographic Ed25519 proof emission.',
+    description: 'Invokes a governed action on a VUA Universal Adapter (GitHub, Linux, Android, Windows, or Bluesky) with cryptographic Ed25519 proof emission.',
     inputSchema: {
       type: 'object',
       properties: {
         adapter_id: {
           type: 'string',
-          enum: ['github', 'linux', 'android', 'windows'],
+          enum: ['github', 'linux', 'android', 'windows', 'bluesky'],
           description: 'Target platform adapter identifier',
         },
         action: {
           type: 'string',
-          description: 'Action to execute on adapter (e.g. inspect_repo, exec_command, adb_shell, powershell_exec)',
+          description: 'Action to execute on adapter (e.g. inspect_repo, exec_command, post, post_thread, reply)',
         },
         target: { type: 'object', description: 'Target metadata' },
         payload: { type: 'object', description: 'Action parameters' },

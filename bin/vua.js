@@ -50,6 +50,7 @@ Comandos Principais:
   vua bench                     Roda benchmark de desempenho e latência local (ops/sec, crypto)
   vua conformance               Roda bateria de conformidade nos 4 adaptadores (100% test suite)
   vua llm [opções]              Executa prompt LLM governado (Qwen Coder local, Ollama ou Gemini)
+  vua bluesky <post|thread|...> Publica posts/threads no Bluesky com prova Ed25519 (AT Protocol)
   vua mcp                       Inicia o servidor MCP local (JSON-RPC 2.0 via stdio) para Cursor, Claude, etc.
   vua verify <proof.json>       Valida criptograficamente um ExecutionProof v1
   vua repo <subcomando> [repo]  Governança de repositório (inspect, bootstrap, verify, repair)
@@ -439,6 +440,89 @@ async function handleRepo() {
   }
 }
 
+async function handleBluesky() {
+  printBanner();
+  const subCmd = args[1] || 'status';
+  const textArg = args[2];
+
+  if (subCmd === 'status') {
+    const adapter = vuaRegistry.get('bluesky');
+    const probe = await adapter?.probeStatus();
+    console.log('🦋 Bluesky / AT Protocol Status:');
+    console.log(`   • Status         : ${probe?.status === 'online' ? '🟢 ONLINE (Autenticado)' : '🟡 PRONTO / AGUARDANDO CREDENCIAIS'}`);
+    console.log(`   • Identificador  : ${process.env.BLUESKY_IDENTIFIER || 'Não configurado'}`);
+    console.log(`   • Senha App      : ${process.env.BLUESKY_APP_PASSWORD ? 'Configurada [PROTEGIDA]' : 'Não configurada'}`);
+    console.log(`   • PDS Service    : ${process.env.BLUESKY_SERVICE_URL || 'https://bsky.social'}`);
+    console.log('\nPara configurar credenciais no ambiente:');
+    console.log('  export BLUESKY_IDENTIFIER="seu-handle.bsky.social"');
+    console.log('  export BLUESKY_APP_PASSWORD="xxxx-xxxx-xxxx-xxxx"');
+    return;
+  }
+
+  if (subCmd === 'post') {
+    if (!textArg) {
+      console.error('❌ Erro: Informe o texto do post. Exemplo: vua bluesky post "Olá Bluesky do VUA!"');
+      process.exit(1);
+    }
+    console.log(`⚡ Publicando post no Bluesky via VUA...`);
+    const result = await vuaRegistry.invoke({
+      adapterId: 'bluesky',
+      action: 'post',
+      approvalToken: 'vua-cli-approval-' + Date.now(),
+      target: { network: 'bluesky' },
+      payload: { text: textArg },
+    });
+    if (result.success) {
+      console.log(`\n✅ Post publicado com sucesso!`);
+      console.log(`   • URL: ${result.data?.url}`);
+      console.log(`   • CID: ${result.data?.cid}`);
+      console.log(`   • Prova Ed25519: ${result.execution_proof?.signature?.substring(0, 32)}...`);
+    } else {
+      const errMsg = result.error?.message || (typeof result.error === 'string' ? result.error : result.data?.error?.message || result.data?.error || 'Erro desconhecido');
+      console.error(`\n❌ Falha ao publicar: ${errMsg}`);
+    }
+    return;
+  }
+
+  if (subCmd === 'thread') {
+    const posts = args.slice(2);
+    if (posts.length === 0) {
+      console.error('❌ Erro: Informe os textos dos posts do thread. Exemplo: vua bluesky thread "Post 1" "Post 2"');
+      process.exit(1);
+    }
+    console.log(`⚡ Publicando thread de ${posts.length} posts no Bluesky...`);
+    const result = await vuaRegistry.invoke({
+      adapterId: 'bluesky',
+      action: 'post_thread',
+      approvalToken: 'vua-cli-approval-' + Date.now(),
+      target: { network: 'bluesky' },
+      payload: { posts },
+    });
+    if (result.success) {
+      console.log(`\n✅ Thread publicada com sucesso!`);
+      console.log(`   • Thread Root URL: ${result.data?.root_url}`);
+      console.log(`   • Posts: ${result.data?.thread_size}`);
+      console.log(`   • Prova Ed25519: ${result.execution_proof?.signature?.substring(0, 32)}...`);
+    } else {
+      const errMsg = result.error?.message || (typeof result.error === 'string' ? result.error : result.data?.error?.message || result.data?.error || 'Erro desconhecido');
+      console.error(`\n❌ Falha ao publicar thread: ${errMsg}`);
+    }
+    return;
+  }
+
+  if (subCmd === 'notifications') {
+    console.log(`⚡ Consultando menções e notificações no Bluesky...`);
+    const result = await vuaRegistry.invoke({
+      adapterId: 'bluesky',
+      action: 'get_notifications',
+      target: { network: 'bluesky' },
+      payload: { limit: 10 },
+    });
+    console.log(JSON.stringify(result.data, null, 2));
+    return;
+  }
+}
+
 // Router
 switch (command) {
   case 'repo':
@@ -465,6 +549,10 @@ switch (command) {
     break;
   case 'llm':
     handleLLM();
+    break;
+  case 'bluesky':
+  case 'bsky':
+    handleBluesky();
     break;
   case 'mcp':
     handleMCP();

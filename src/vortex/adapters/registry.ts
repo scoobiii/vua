@@ -19,6 +19,7 @@ import { VUAGitHubAdapter } from './github.js';
 import { VUALinuxAdapter } from './linux.js';
 import { VUAAndroidAdapter } from './android.js';
 import { VUAWindowsAdapter } from './windows.js';
+import { VUABlueskyAdapter } from './bluesky.js';
 
 function validateApproval(
   approval: ApprovalClaims,
@@ -111,6 +112,7 @@ class VUAAdapterRegistry {
     this.register(new VUALinuxAdapter());
     this.register(new VUAAndroidAdapter());
     this.register(new VUAWindowsAdapter());
+    this.register(new VUABlueskyAdapter());
     this.register(new CanaryAdapter());
   }
 
@@ -253,6 +255,8 @@ class VUAAdapterRegistry {
       (executionData.external_effect as ExternalEffect) ||
       (request.adapterId === 'github' && ['push_branch', 'create_pull_request', 'create_pr_written', 'merge_pr'].includes(request.action)
         ? (Boolean(process.env.GITHUB_TOKEN) ? 'remote_confirmed' : 'none')
+        : request.adapterId === 'bluesky' && ['post', 'post_thread', 'reply', 'update_profile'].includes(request.action)
+        ? (Boolean(process.env.BLUESKY_IDENTIFIER && (process.env.BLUESKY_APP_PASSWORD || process.env.BSKY_APP_PASSWORD)) ? 'remote_confirmed' : 'none')
         : 'local_only');
 
     const authenticated = Boolean(
@@ -276,13 +280,13 @@ class VUAAdapterRegistry {
       environment: adapter.metadata.environment,
       timestamp: new Date().toISOString(),
       durationMs,
-      data: executionData,
+      data: Object.keys(executionData).length > 0 ? executionData : ((pipelineRes.output as Record<string, unknown>) || { error: pipelineRes.error?.message }),
       auditLog,
       execution_kind: 'capability',
       capability_executed: capabilityExecuted,
       execution_proof: pipelineRes.execution_proof,
       verification,
-      error: executionData.error as any,
+      error: (executionData.error as any) || pipelineRes.error,
     };
   }
 }
