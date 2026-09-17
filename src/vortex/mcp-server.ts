@@ -409,6 +409,15 @@ export async function handleMCPMessage(message: {
         id,
         result: {
           status: isVerified ? 'EXECUTION_SUCCESS' : 'VERIFICATION_FAILED',
+          verified: isVerified,
+          structuredContent: {
+            verified: isVerified,
+            verification_scope: isVerified ? 'full' : 'rejected',
+            tamper_evident: true,
+            rfc8785_canonical: verification.checks?.canonicalization?.passed ?? false,
+            reasons: verification.reasons,
+            checks: verification.checks,
+          },
           output: {
             verified: isVerified,
             verification_scope: isVerified ? 'full' : 'rejected',
@@ -433,6 +442,7 @@ export async function handleMCPMessage(message: {
     let operation: VortexOperation = 'execute';
     if (toolName === 'vortex.inspect') operation = 'inspect';
     else if (toolName === 'vortex.propose') operation = 'propose';
+    else if (toolName === 'vortex.verify') operation = 'verify';
     else if (toolName === 'vortex.branch.write') operation = 'branch.write';
     else if (toolName === 'vortex.execute') operation = 'execute';
     else {
@@ -447,7 +457,7 @@ export async function handleMCPMessage(message: {
       request_id: (args.request_id as string) || `req-mcp-${Date.now()}`,
       operation,
       target: args.target as Record<string, unknown>,
-      input: (args.input as Record<string, unknown>) || {},
+      input: (args.input as Record<string, unknown>) || args,
       authorization: args.authorization as VortexRequest['authorization'],
       sandbox: args.sandbox as VortexRequest['sandbox'],
       approval_token: args.approval_token as string,
@@ -455,11 +465,16 @@ export async function handleMCPMessage(message: {
 
     const vortexRes: VortexResponse = await executeVortexPipeline(vortexReq);
 
+    const isOutputVerified = vortexRes.output && typeof vortexRes.output === 'object' && 'verified' in vortexRes.output
+      ? (vortexRes.output as any).verified
+      : undefined;
+
     return {
       jsonrpc: '2.0',
       id,
       result: {
         status: vortexRes.status,
+        ...(isOutputVerified !== undefined ? { verified: isOutputVerified, structuredContent: vortexRes.output } : {}),
         output: vortexRes.output,
         error: vortexRes.error,
         execution_proof: vortexRes.execution_proof,
