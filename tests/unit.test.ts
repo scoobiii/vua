@@ -161,6 +161,61 @@ runTest('10. GOS3: Cálculo de checksum de conteúdo e inspeção de cabeçalho'
   assert.equal(inspection.status, 'VALID', 'Status deve ser VALID');
 });
 
+// 10. RFC 8785 Edge Cases: Unicode, Emojis, Floating Points & Deep Nesting
+runTest('11. RFC 8785: Casos extremos de Unicode, caracteres de controle e -0', () => {
+  const edgeObj = {
+    zero: -0,
+    emoji: '🚀🛡️⚡',
+    special_chars: 'Line1\nLine2\t"Quote"\\Backslash',
+    nested_deep: { l1: { l2: { l3: { l4: { val: 42 } } } } },
+    empty_arr: [],
+    empty_obj: {},
+    boolean_arr: [true, false, true],
+  };
+  const canonical = canonicalize(edgeObj);
+  assert.ok(canonical.includes('"zero":0'), 'Zero negativo deve ser normalizado para 0');
+  assert.ok(canonical.includes('🚀🛡️⚡'), 'Emojis devem ser preservados de forma determinística');
+  assert.ok(canonical.includes('\\n'), 'Quebras de linha devem ser escapadas conforme JSON RFC');
+});
+
+// 11. Sandbox: Defesa contra Path Traversal Complexo & Ambíguo
+runTest('12. Sandbox: Bloqueio estrito de variações oblíquas de Path Traversal', () => {
+  const forbiddenPaths = [
+    'src/../../etc/passwd',
+    './../app/secret.pem',
+    'src/vortex/../../../var/log',
+    '....//....//etc',
+    '/etc/hosts',
+  ];
+  for (const p of forbiddenPaths) {
+    const check = validateFilesystemScope(p, ['src', 'dist']);
+    assert.equal(check.allowed, false, `Caminho perigoso deve ser bloqueado: ${p}`);
+  }
+
+  // Caminho seguro no escopo
+  const allowed = validateFilesystemScope('src/vortex/types.ts', ['src']);
+  assert.equal(allowed.allowed, true, 'Caminho legítimo dentro do escopo deve ser permitido');
+});
+
+// 12. Hardware Dynamic Baseline: Arquétipos Sintéticos
+runTest('13. Hardware Profiler: Verificação de baseline para diferentes arquétipos', () => {
+  const edgeBaseline = computeDynamicBaseline({
+    platform: 'linux',
+    architecture: 'arm',
+    isTermux: false,
+    isAlpine: true,
+    isWSL: false,
+    cpuModel: 'Cortex-A53',
+    cpuCores: 1,
+    totalMemoryMB: 512,
+    freeMemoryMB: 128,
+    nodeVersion: 'v22.0.0',
+    archetype: 'EMBEDDED_EDGE',
+  });
+  assert.ok(edgeBaseline.jitterTolerancePercent >= 20, 'EMBEDDED_EDGE deve ter tolerância a jitter >= 20%');
+  assert.equal(edgeBaseline.maxConcurrentOperations, 1, 'Edge mono-core deve limitar concorrência a 1');
+});
+
 console.log('═════════════════════════════════════════════════════════════════');
 console.log(`STATUS: ✅ 100% DOS TESTES UNITÁRIOS APROVADOS (${passedTests}/${totalTests})`);
 console.log('═════════════════════════════════════════════════════════════════\n');

@@ -551,7 +551,15 @@ async function startServer() {
   // 6. Independent Verifier Endpoint
   app.post('/api/vortex/verify', (req, res) => {
     try {
-      const { proof, options } = req.body;
+      const proof = req.body?.proof || (req.body?.proof_version ? req.body : undefined);
+      const options = req.body?.options;
+      if (!proof) {
+        return res.status(400).json({
+          valid: false,
+          status: 'VERIFICATION_FAILED',
+          reasons: ['Missing proof payload. Supply { proof: ... } or an ExecutionProof object directly.'],
+        });
+      }
       const verification = verifyExecutionProof(proof, options);
       res.json(verification);
     } catch (err: unknown) {

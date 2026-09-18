@@ -16,6 +16,7 @@ import { vuaRegistry } from '../src/vortex/adapters/registry.js';
 import { runVUAAdaptersE2ESuite } from '../src/vortex/conformance.js';
 import { executeGovernedLLM } from '../src/vortex/llm.js';
 import { runCanaryTests } from '../scripts/test-canary.js';
+import { createGOS3Session, onboardResource, revokeGOS3Session, validateGOS3Session } from '../src/vortex/gos3.js';
 
 console.log('🧪 Iniciando Suíte de Testes de Integração VUA (100% Cobertura)...');
 console.log('═════════════════════════════════════════════════════════════════');
@@ -95,6 +96,41 @@ await runTest('5. Governed LLM: Execução governada com emissão de ExecutionPr
   } catch (err: any) {
     // Se o serviço estiver offline, a falha deve ser tratada como offline graceful
     assert.ok(err.message, 'Erro tratado gracefully');
+  }
+});
+
+// 6. GOS3 Session Lifecycle & Revocation
+await runTest('6. GOS3 Lifecycle: Onboard, Criação de Sessão, Validação e Revogação', async () => {
+  const resource = onboardResource('/workspace/governed/contract.ts', 'initial content', 'repository.write');
+  assert.ok(resource.resource_path, 'Recurso deve ser registrado com resource_path');
+  assert.ok(resource.checksum.startsWith('sha256:'), 'Recurso deve calcular checksum inicial');
+
+  const session = createGOS3Session('scoobiii', 'agent/vortex-llm', resource.resource_path, 300);
+  assert.equal(session.status, 'ACTIVE', 'Sessão inicial deve ser ACTIVE');
+
+  const checkActive = validateGOS3Session(session.session_id, resource.resource_path);
+  assert.equal(checkActive.valid, true, 'Validação de sessão ativa deve retornar valid: true');
+
+  const revoked = revokeGOS3Session(session.session_id);
+  assert.equal(revoked, true, 'Revogação de sessão ativa deve retornar true');
+
+  const checkRevoked = validateGOS3Session(session.session_id);
+  assert.equal(checkRevoked.valid, false, 'Sessão revogada deve ser rejeitada');
+  assert.equal(checkRevoked.status, 'REVOKED', 'Status da sessão deve ser REVOKED');
+});
+
+// 7. Universal Adapters Metadata & Action Capabilities Check
+await runTest('7. VUA Adapters Matrix: Sondagem de adaptadores e conformidade de interface', async () => {
+  const adapters = vuaRegistry.list();
+  assert.ok(adapters.length >= 4, 'Pelo menos 4 adaptadores devem estar registrados');
+
+  for (const meta of adapters) {
+    assert.ok(meta.id, 'Adaptador deve possuir id');
+    assert.ok(meta.name, 'Adaptador deve possuir nome descritivo');
+    assert.ok(meta.environment, 'Adaptador deve declarar ambiente de destino');
+    assert.ok(Array.isArray(meta.capabilities), 'Adaptador deve declarar lista de capacidades');
+    assert.ok(Array.isArray(meta.supportedActions), 'Adaptador deve declarar array de ações suportadas');
+    assert.ok(meta.supportedActions.length > 0, 'Adaptador deve prover ao menos 1 ação suportada');
   }
 });
 

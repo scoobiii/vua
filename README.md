@@ -66,6 +66,7 @@ O VUA implementa o fluxo completo de modificação e governança de código:
 Documentação completa e estruturada disponível no repositório:
 
 - 📖 [**docs/README.md**](./docs/README.md) — Índice mestre e arquitetura geral.
+- 🧪 [**docs/TESTING.md**](./docs/TESTING.md) — **Novo**: Guia mestre da suíte de testes (100% cobertura), K6 Load/Stress/Chaos/Spike/Soak e CI/CD.
 - 🛡️ [**docs/MANUAL-DE-SEGURANCA.md**](./docs/MANUAL-DE-SEGURANCA.md) — **Novo**: Manual oficial de segurança, gestão de PAT volátil, anti-replay e criptografia Ed25519.
 - 🌐 [**docs/VUA-PRODUTOS-SERVICOS-POR-INDUSTRIA.md**](./docs/VUA-PRODUTOS-SERVICOS-POR-INDUSTRIA.md) — **Novo**: Catálogo de produtos, dores resolvidas por LLM, Web3 e monetização.
 - 📦 [**docs/01-visao-geral-e-instalacao.md**](./docs/01-visao-geral-e-instalacao.md) — Instalação, CLI `vua`, biblioteca npm e diagnósticos.
@@ -367,6 +368,35 @@ A suíte adversarial testa ativamente as 5 violações de segurança fundamentai
 | **ONDE ESTAMOS**<br>*(Estado Atual)* | **MCP & Registro Multi-LLM** | • Servidor **Model Context Protocol (MCP)** em `bin/mcp-server.js` com ferramentas canônicas (`vortex.*`).<br>• Catálogo federado `vua-llms.json` e script de resolução (`npm run vua:llms`) para Gemini, OpenAI e Ollama offline.<br>• Documentação arquitetural formal em `docs/RUNTIME.md` e `docs/GAIS.md`. | 🟢 Ativo & Operacional |
 | | **GitHub Seguro & Ciclo Git** | • Sincronização e binding com repositório remoto (`scoobiii/vua`).<br>• Token de sessão volátil (zero persistência em disco/logs).<br>• Operações governadas de escrita de PR (`create_pr_written`), commit em branch (`write_branch_commit`) e merge seguro (`merge_pr`).<br>• Equivalência determinística (`vua:prove`) e comparação de baselines (`tao:compare`).<br>• 15 Quality Gates automáticos no CI (`npm test` com 100% de aprovação). | 🟢 Ativo & Operacional |
 | **RUMO À PRODUÇÃO**<br>*(Próximos Passos)* | **Endurecimento & Ativação GAIS** | • Ativação em produção do **GAIS (Governance AI System)** via MCP.<br>• Rotação e custódia segura de chaves Ed25519 corporativas (KMS/HSM).<br>• Monitoramento de deriva semântica de modelos (evaluators contínuos).<br>• Empacotamento de distribuição final: binário autônomo e contêiner Alpine de produção minimalista com auditoria estrita. | 🟡 Planejado |
+
+---
+
+## 🧪 Comandos da Suíte de Testes & Carga K6
+
+O repositório possui cobertura integral (100% de aprovação) em testes unitários, integração, segurança, benchmark, estresse, caos e k6:
+
+```bash
+# 1. Pipeline de CI Completo (Lint + Unitários + Integração + Segurança + Stress + Caos + Bench)
+npm run test:ci
+
+# 2. Suíte de Carga & Estresse K6 Oficial (./bin/k6)
+npm run test:k6          # Executa todos os cenários principais k6
+npm run test:k6:smoke    # Sanidade e auditoria de prova
+npm run test:k6:load     # Carga gradual até 40 VUs (p95 < 120ms)
+npm run test:k6:stress   # Estresse até 60 VUs
+npm run test:k6:spike    # Rajada instantânea de 120 VUs
+npm run test:k6:soak     # Resistência e verificação de memory leak
+npm run test:k6:chaos    # Injeção adversarial de adulteração e replay
+
+# 3. Testes Especializados do Runtime
+npm run test:unit        # 13 testes unitários matemáticos e normativos
+npm run test:integration # 7 testes de integração ponta a ponta
+npm run test:security    # Auditoria de Zero-Leakage de PAT e escopos
+npm run test:bench       # Benchmark de latência (<370µs) e throughput
+npm run test:chaos       # Testes adversariais de bit-flips e corrupção
+```
+
+Consulte [**docs/TESTING.md**](./docs/TESTING.md) para detalhes técnicos de cada cenário e thresholds.
 
 ---
 
