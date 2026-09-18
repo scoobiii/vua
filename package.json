@@ -68,6 +68,7 @@
     "test:k6:spike": "tsx tests/k6/k6-runner.ts spike",
     "test:k6:soak": "tsx tests/k6/k6-runner.ts soak",
     "test:k6:chaos": "tsx tests/k6/k6-runner.ts chaos",
+    "test:k6:degradation": "tsx tests/k6/k6-runner.ts degradation",
     "build:cli": "esbuild bin/vua.js --bundle --platform=node --format=cjs --packages=external --outfile=dist/vua.cjs && chmod +x dist/vua.cjs"
   },
   "dependencies": {

@@ -74,6 +74,7 @@ async function main() {
     spike: 'tests/k6/spike.js',
     soak: 'tests/k6/soak.js',
     chaos: 'tests/k6/chaos.js',
+    degradation: 'tests/k6/degradation.js',
   };
 
   console.log('═════════════════════════════════════════════════════════════════════');
