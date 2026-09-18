@@ -1,43 +1,62 @@
-# ⚡ Documentação Oficial do VUA (Vortex Universal Connector)
+# VUA — Documentação Oficial
 
-Bem-vindo à documentação técnica do **VUA (Vortex Universal Connector)** — motor universal de governança, conformidade criptográfica (Ed25519 + RFC 8785) e gateway para agentes, LLMs e sistemas operacionais.
+**Vortex Universal Adapter / Governed Execution Runtime**
 
----
+## Status atual — 2026-09-17
 
-## 📚 Índice dos Guias Práticos
+VUA já é um **produto de software executável**: possui core de governança, CLI `vua`, biblioteca TypeScript/Node.js, adaptadores, MCP e verificação criptográfica de `ExecutionProof`.
 
-| Guia | Descrição | Tópicos Cobertos |
-| :--- | :--- | :--- |
-| [**01. Visão Geral e CLI**](./01-visao-geral-e-instalacao.md) | Instalação, CLI `vua`, biblioteca npm e diagnósticos | Instalação local, comandos do CLI, biblioteca npm TypeScript, verificação de integridade |
-| [**02. Mobile APK Sem GitHub (Passo 2)**](./02-mobile-apk-sem-github.md) | App Android APK autônomo e isolado | Package `com.vortex.foundation.vua`, Capacitor, Termux nativo, isolamento SELinux, Scoped Storage, zero chamadas ao GitHub |
-| [**03. LLM no Browser, Qwen Coder e Gemini (Passo 3)**](./03-llm-browser-e-qwen-gemini.md) | Modelos locais offline e nuvem segura | Qwen 2.5 Coder 0.5B (Ollama / WebGPU / Llama.cpp), Gemini API Key segura no backend, prova Ed25519 |
-| [**04. Termux, Alpine PRoot e Benchmark**](./04-termux-e-alpine-proot.md) | Execução em ambientes ultra-leves e testes | Setup no Termux (Android), Alpine Linux (PRoot/Docker), benchmark local (throughput, latência, RAM) |
-| [**05. GitHub App Remota vs Adaptadores Locais**](./05-adapters-local-vs-github-remoto.md) | Integração remota e adaptadores para apps locais | GitHub App Remota (.pem, JWT, tokens), Linux/Android/Windows adapters, MCP Server (Cursor, Claude, VSCode), SDK local |
-| [**06. Agent Patch Arena CI Gate**](./06-agent-patch-arena-ci.md) | Arena Darwiniana e governança de patches | Pipeline de benchmark estatístico, critérios PASS_SUPERIOR (CV <= 10%, Delta >= +5%), isolamento pull_request_target |
-| [**07. Conectores e Adaptadores Disponíveis**](./07-conectores-e-adaptadores.md) | Catálogo técnico de Conectores e Adaptadores | Conectores de infraestrutura (filesystem, runtime, MCP, LLM) e adaptadores de SO (github, linux, android, windows, canary) |
-| [**08. Conectar ao Claude App**](./08-conectar-ao-claude-app.md) | Guia passo a passo para o Claude (Mobile/Desktop) | Configuração do conector personalizado, preenchimento de campos e uso das ferramentas |
-| [**09. Governança: Baseline Dinâmica e Tolerância**](./governance/BASELINE-TOLERANCE-REPORT.md) | Baseline por fingerprint de hardware e tolerância | Eliminação de ruído estatístico em ARM64/Termux, separação entre indução e autorização em runtime, 14 gates 100% verdes |
+O pacote está configurado para npm como `@vortexfoundation/vua` e expõe o comando `vua` pelo campo `bin`. Isso comprova a configuração do pacote; publicação no registry é um gate separado.
 
----
+A integração Linux atual é **nativa em nível de userspace/CLI**: o runtime executa diretamente em Linux e possui adaptador Linux. Ainda não é um binário ELF independente nem uma distribuição `.deb/.rpm/.apk`.
 
-## 🎯 Resumo Rápido de Comandos
+### Evidência MCP auditada em 2026-09-17
+
+- `tools/list`: 314,5 req/s; p50 2,74 ms; erro 0%
+- `vortex.inspect`: 47,2 req/s; p50 21,77 ms; erro 0%
+- `vortex.verify` válido: 244,2 req/s; p50 3,82 ms; erro 0%
+- `vortex.verify` adulterado: 268,8 req/s; p50 3,49 ms; erro 0%
+- E2E inspect → verify: 36,6 req/s; p50 26,65 ms; erro 0%
+- carga concorrente C1/C5/C10/C20: erro observado 0%
+- RSS do servidor: 16,61 MB inicial → 27,50 MB após carga
+
+Esses números caracterizam o ambiente de teste ARM64/Alpine; não são SLA universal.
+
+## Índice
+
+| Guia | Conteúdo |
+|---|---|
+| [01. Visão Geral e CLI](./01-visao-geral-e-instalacao.md) | instalação, CLI, biblioteca e pacote npm |
+| [02. Mobile APK](./02-mobile-apk-sem-github.md) | arquitetura mobile |
+| [03. LLM](./03-llm-browser-e-qwen-gemini.md) | integração local/cloud |
+| [04. Termux e Alpine](./04-termux-e-alpine-proot.md) | execução ARM64 e benchmarks |
+| [05. Adapters](./05-adapters-local-vs-github-remoto.md) | GitHub, Linux, Android, Windows e MCP |
+| [06. Agent Patch Arena](./06-agent-patch-arena-ci.md) | gates de patches |
+| [07. Conectores](./07-conectores-e-adaptadores.md) | catálogo técnico |
+| [08. Claude App](./08-conectar-ao-claude-app.md) | integração MCP |
+| [09. Baseline](./governance/BASELINE-TOLERANCE-REPORT.md) | baseline dinâmica |
+| [Product Status](./PRODUCT-STATUS-2026-09-17.md) | produto, mercados, evidências e gates de release |
+| [Linux Native CLI Status](./LINUX-NATIVE-CLI-STATUS.md) | limites atuais da integração Linux |
+| [Produtos por Indústria](./VUA-PRODUTOS-SERVICOS-POR-INDUSTRIA.md) | aplicações e modelos de oferta |
+
+## CLI
 
 ```bash
-# Diagnóstico do sistema (CPU, RAM, ambiente)
-npm run vua status
-
-# Lista de adaptadores locais e remotos
-npm run vua adapters
-
-# Testar ação no Android local (SELinux)
-npm run vua invoke android check_selinux
-
-# Benchmark de latência e assinatura Ed25519
-npm run bench
-
-# Testar LLM offline com Qwen 2.5 Coder 0.5B
-npm run vua llm -- --provider ollama --model qwen2.5-coder:0.5b --prompt "console.log('hello')"
-
-# Iniciar servidor MCP local para Cursor / Claude Desktop / VSCode
-npm run vua mcp
+npm install
+npm link
+vua status
+vua adapters
+vua bench
+vua verify proof.json
+vua mcp
 ```
+
+## npm
+
+```bash
+npx @vortexfoundation/vua status
+npm install -g @vortexfoundation/vua
+vua status
+```
+
+**Nota:** os comandos acima dependem da publicação/instalação efetiva do pacote no registry. Em desenvolvimento, `npm link` executa diretamente o checkout local.
