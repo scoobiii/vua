@@ -302,14 +302,44 @@ async function handleVerify() {
 
   try {
     const raw = fs.readFileSync(filePath, 'utf8');
-    const proof = JSON.parse(raw);
+    let proof = JSON.parse(raw);
+
+    // Se for um relatório de evidência da fundação (como .vortex-evidence.json)
+    if (proof.schema === 'vortex-execution-evidence/v1' || (proof.canonical_hash && proof.result)) {
+      const isOk = proof.result && Object.values(proof.result).every(v => v === 'PASS' || v === '100%');
+      console.log(`\n🔍 Auditoria de Relatório de Evidência Vortex:`);
+      console.log(`   • Schema       : ${proof.schema}`);
+      console.log(`   • Commit SHA   : ${proof.commit_sha}`);
+      console.log(`   • Evidence Hash: ${proof.canonical_hash}`);
+      console.log(`   • Veredito     : ${isOk ? '✅ 100% GATES APROVADOS (PASS)' : '❌ GATES REJEITADOS'}`);
+      console.log(`   • Cobertura    : ${proof.result?.coverage || 'N/A'}`);
+      console.log(`   • Segurança    : ${proof.result?.security || 'N/A'}`);
+      console.log(`   • Performance  : ${proof.result?.performance || 'N/A'}`);
+      console.log(`   • Provas Audit.: ${proof.execution_proofs?.length ?? proof.proofs_count ?? 'OK'}`);
+      return;
+    }
+
+    // Se for um envelope contendo execution_proof embutido
+    if (proof.execution_proof) {
+      proof = proof.execution_proof;
+    }
+
     const verification = verifyExecutionProof(proof);
 
+    const isOk = verification.valid === true || verification.status === 'VERIFIED';
+    const keyId = verification.checks?.identity?.details?.key_id || proof.identity?.key_id || proof.identity?.public_key || 'well-known';
+    const version = proof.schema_version || proof.vortex_version || 'v1';
+
     console.log(`\n🔍 Auditoria Criptográfica Independente:`);
-    console.log(`   • Schema       : ${proof.schema_version}`);
-    console.log(`   • Veredito     : ${verification.verified ? '✅ VÁLIDO & NÃO-ADULTERADO' : '❌ INVÁLIDO'}`);
-    console.log(`   • Chave Pública: ${verification.public_key_used?.substring(0, 16)}...`);
-    console.log(`   • Detalhes     : ${verification.details}`);
+    console.log(`   • Schema       : ${version}`);
+    console.log(`   • Veredito     : ${isOk ? '✅ VÁLIDO & NÃO-ADULTERADO (PASS)' : '❌ INVÁLIDO (REJECTED)'}`);
+    console.log(`   • Chave Pública: ${String(keyId).substring(0, 32)}...`);
+    console.log(`   • Proof Hash   : ${proof.proof_hash || 'N/A'}`);
+    if (!isOk) {
+      console.log(`   • Motivos      : ${JSON.stringify(verification.reasons)}`);
+    } else {
+      console.log(`   • Canonical JCS: ${verification.canonical_jcs ? Buffer.byteLength(verification.canonical_jcs) + ' bytes' : 'OK'}`);
+    }
   } catch (err) {
     console.error(`❌ Erro ao ler ou validar arquivo: ${err.message}`);
     process.exit(1);

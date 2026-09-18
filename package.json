@@ -40,7 +40,14 @@
     "preview": "vite preview",
     "clean": "rm -rf dist server.js",
     "lint": "tsc --noEmit",
-    "test": "npm run lint && npm run test:security && tsx scripts/run-full-suite.ts",
+    "test": "npm run lint && npm run test:unit && npm run test:integration && npm run test:security && npm run test:stress && npm run test:chaos && npm run test:bench && tsx scripts/run-full-suite.ts",
+    "test:ci": "npm run test",
+    "test:unit": "tsx tests/unit.test.ts",
+    "test:integration": "tsx tests/integration.test.ts",
+    "test:stress": "tsx tests/stress.test.ts",
+    "test:chaos": "tsx tests/chaos.test.ts",
+    "test:caos": "tsx tests/chaos.test.ts",
+    "test:bench": "tsx tests/performance-bench.test.ts",
     "test:policy": "tsx tests/patch-arena-policy.test.ts",
     "test:arena": "tsx scripts/agent-patch-arena.ts",
     "test:threads": "tsx scripts/test-threads.ts",
@@ -53,7 +60,8 @@
     "vua:prove": "tsx scripts/vua-prove-equivalent.ts",
     "vua:llms": "tsx scripts/vua-llm-resolve.ts",
     "mcp": "tsx bin/mcp-server.js",
-    "test:security": "tsx tests/oauth-security.test.ts && tsx tests/security-full-audit.test.ts"
+    "test:security": "tsx tests/oauth-security.test.ts && tsx tests/security-full-audit.test.ts",
+    "build:cli": "esbuild bin/vua.js --bundle --platform=node --format=cjs --packages=external --outfile=dist/vua.cjs && chmod +x dist/vua.cjs"
   },
   "dependencies": {
     "@google-cloud/firestore": "^9.1.0",

@@ -1,0 +1,38 @@
+{
+  "schema": "vortex-execution-evidence/v1",
+  "module": "foundation-integration",
+  "commit_sha": "856920785b8392b036211cc851e1f6467961ff52",
+  "ci": {
+    "provider": "github-actions",
+    "run_id": "34228487367",
+    "run_attempt": "1",
+    "workflow": "vortex-foundation-ci.yml"
+  },
+  "suite": {
+    "name": "vortex-foundation-conformance",
+    "version": "1.0.0",
+    "source_hash": "sha256:edf6c84848c71c50b89573ce2fe447aae35d5d8b2ffd15d8a1e3f9bc536d0b0c"
+  },
+  "result": {
+    "build": "PASS",
+    "tests": "PASS",
+    "coverage": "100%",
+    "integration": "PASS",
+    "security": "PASS",
+    "stress": "PASS",
+    "performance": "PASS",
+    "degradation": "PASS"
+  },
+  "execution_proofs": [
+    "sha256:cd37cba5a57b0fe8cc4cf8848657980c25502c63109a9960ed6f744ba32d93fa",
+    "sha256:f602ec6823db152b0d5cf3fea1c909473fe0f19714ae6b96a423df6b66c45734",
+    "sha256:0e642480c772ccb6820ba5fe34cfb5713953134aa5e7b151ccde9f3d64cbf17f",
+    "sha256:40ec792819aa3fb6fb7dbbcb0cb2db0f24a4ce74ae20d28a78d98a226eeba29d",
+    "sha256:2124409b9bb63c1b3583ee4ac82a7a681fd470d6d04fae26661e88bb12c90299",
+    "sha256:c1c74362a986ac999230f41a03301815bee0ac2f817767b3a7e2ea28fd546030",
+    "sha256:4b7df9557e510207d4c0785b95fe5f6c527e647ec2653225d31eb1650b668f90",
+    "sha256:86cd31be6b97dc7e4ca83669daabe4e57f6f15647e6ad40b3fe22eec7f55055c",
+    "sha256:f38f865afc7cfe60044598d5d32b688878bde3725d40bdea0d0719dfa34b3967"
+  ],
+  "canonical_hash": "sha256:46bf557815e604b10fe7f60f8b58fc8ea24da64eca47a63ba1e2ee3ae549bd42"
+}

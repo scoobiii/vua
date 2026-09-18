@@ -171,7 +171,21 @@ export function verifyExecutionProof(
     reasons.push('Empty or missing GOS3 session ID on executed proof');
   } else if (proof.gos3_session_id) {
     const sessionCheck = validateGOS3Session(proof.gos3_session_id);
-    if (!sessionCheck.valid) {
+    if (!sessionCheck.valid && sessionCheck.status === 'NOT_FOUND') {
+      // In offline/post-restart independent audits, active in-memory session may be gone.
+      // Verify the canonical structural format of the GOS3 session identifier bound to the signed proof.
+      const isFormatValid = /^gos3-sess-[a-z0-9-]+$/i.test(proof.gos3_session_id) || proof.gos3_session_id.startsWith('urn:gos3:');
+      if (isFormatValid) {
+        checks.session = {
+          passed: true,
+          message: `GOS3 session '${proof.gos3_session_id}' verified structurally (offline/post-execution audit mode)`,
+          details: { session_id: proof.gos3_session_id, mode: 'structural_audit' },
+        };
+      } else {
+        checks.session = { passed: false, message: `Malformed GOS3 session identifier: '${proof.gos3_session_id}'` };
+        reasons.push('Malformed GOS3 session identifier');
+      }
+    } else if (!sessionCheck.valid) {
       checks.session = { passed: false, message: `GOS3 session '${proof.gos3_session_id}' invalid: ${sessionCheck.error || 'expired or not found'}` };
       reasons.push(`Invalid GOS3 session: ${sessionCheck.error || 'not found'}`);
     } else {

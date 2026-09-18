@@ -20,6 +20,7 @@ import {
   verifyProofSignature,
   signCanonicalString,
   verifyCanonicalSignature,
+  sha256,
 } from '../src/vortex/crypto.js';
 import { executeVortexPipeline, resetAntiReplayCache } from '../src/vortex/gateway.js';
 import { verifyExecutionProof } from '../src/vortex/verifier.js';
@@ -206,6 +207,71 @@ await runTest('8. Verificador Independente: Validação completa de ExecutionPro
   const verification = verifyExecutionProof(result.execution_proof);
   assert.equal(verification.valid, true, 'Verificador deve atestar validade da prova');
   assert.equal(verification.status, 'VERIFIED', 'Status da prova deve ser VERIFIED');
+});
+
+// 9. PROOF HASH TAMPERING DETECTION
+await runTest('9. Proof Hash Anti-Tamper: Rejeição estrita de adulteração no proof_hash RFC 8785', async () => {
+  const result = await executeVortexPipeline({
+    request_id: 'test-hash-tamper-' + Date.now(),
+    operation: 'inspect',
+    target: { path: '.' },
+    input: {},
+  });
+
+  assert.ok(result.execution_proof, 'Deve conter execution_proof');
+  const forgedProof = {
+    ...result.execution_proof,
+    proof_hash: 'sha256:0000000000000000000000000000000000000000000000000000000000000000',
+  };
+
+  const verification = verifyExecutionProof(forgedProof);
+  assert.equal(verification.valid, false, 'Deve rejeitar prova com proof_hash forjado');
+  assert.ok(verification.reasons.some(r => r.includes('PROOF_HASH_INVALID') || r.includes('proof_hash')), 'Deve reportar mismatch de proof_hash');
+});
+
+// 10. OFFLINE / POST-RESTART GOS3 SESSION AUDIT
+await runTest('10. GOS3 Offline Audit: Validação estrutural canônica de sessão pós-término de processo', () => {
+  const identity = generateVortexIdentity('offline-auditor', 'agent/auditor', 'offline-key');
+  const validOfflineProof = {
+    schema_version: 'vortex-execution-evidence/v1',
+    request_id: 'req-offline-audit',
+    operation: 'inspect',
+    target: { path: '.' },
+    input_hash: 'sha256:1111111111111111111111111111111111111111111111111111111111111111',
+    output_hash: 'sha256:2222222222222222222222222222222222222222222222222222222222222222',
+    executed: true,
+    gos3_session_id: 'gos3-sess-offline-audit-canonical-token-12345',
+    started_at: new Date(Date.now() - 100).toISOString(),
+    completed_at: new Date().toISOString(),
+    duration_ms: 100,
+    identity,
+  };
+
+  const payloadToSign = {
+    request_id: validOfflineProof.request_id,
+    operation: validOfflineProof.operation,
+    target: validOfflineProof.target,
+    input_hash: validOfflineProof.input_hash,
+    output_hash: validOfflineProof.output_hash,
+    executed: validOfflineProof.executed,
+    started_at: validOfflineProof.started_at,
+    completed_at: validOfflineProof.completed_at,
+    duration_ms: validOfflineProof.duration_ms,
+    gos3_session_id: validOfflineProof.gos3_session_id,
+  };
+
+  const canonical = canonicalizeRFC8785(payloadToSign);
+  const sig = signProofPayload(payloadToSign, identity.private_key);
+  const computedHash = sha256(canonical);
+
+  const fullProof = {
+    ...validOfflineProof,
+    proof_hash: computedHash,
+    signature: sig,
+  };
+
+  const verification = verifyExecutionProof(fullProof as any);
+  assert.equal(verification.checks.session.passed, true, 'Sessão estrutural válida deve passar auditoria offline');
 });
 
 console.log('═════════════════════════════════════════════════════════════════');

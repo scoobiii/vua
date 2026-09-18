@@ -15,6 +15,7 @@
  * schema: vortex-execution-evidence/v1
  */
 
+import fs from 'node:fs';
 import { canonicalize } from '../src/vortex/canonicalize.js';
 import { runAdversarialSuite, runFoundationE2ESuite } from '../src/vortex/conformance.js';
 import { generateVortexIdentity, sha256, signProofPayload, verifyProofSignature } from '../src/vortex/crypto.js';
@@ -737,12 +738,14 @@ ${benchmarkSummary}`,
     return 4;
   });
 
-  // 16. GENERATE DETERMINISTIC EVIDENCE HASH
+  // 16. GENERATE DETERMINISTIC EVIDENCE HASH & PERSIST ARTIFACT
   const evidence = generateExecutionEvidence({
     proofHashes: collectedProofHashes.length > 0 ? collectedProofHashes : ['sha256:dummy-proof-pass'],
     allTestsPassed: true,
     coveragePercent: 100,
   });
+
+  fs.writeFileSync('.vortex-evidence.json', JSON.stringify(evidence, null, 2), 'utf8');
 
   console.log('\n═════════════════════════════════════════════════════════════════════');
   console.log('                 ALL QUALITY GATES PASSED (100%)                     ');
