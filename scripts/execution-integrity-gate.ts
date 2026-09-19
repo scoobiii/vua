@@ -168,6 +168,22 @@ const mockDetectionPassed = detector.error === undefined && detector.status === 
 
 const suites = discoverSuites();
 const results = suites.map(([id, command]) => runSuite(id, command));
+
+const expectedTestScripts = Object.entries(
+  (JSON.parse(readFileSync('package.json', 'utf8')) as { scripts?: Record<string, string> }).scripts ?? {},
+)
+  .filter(([name]) => name.startsWith('test:'))
+  .filter(([name]) => name !== 'test:ci')
+  .map(([name]) => name)
+  .sort();
+
+const discoveredTestScripts = suites
+  .filter(([name]) => name.startsWith('test:'))
+  .map(([name]) => name)
+  .sort();
+
+const missingSuites = expectedTestScripts.filter((name) => !discoveredTestScripts.includes(name));
+const unexpectedSuites = discoveredTestScripts.filter((name) => !expectedTestScripts.includes(name));
 const failed = results.filter((r) => r.status !== 'PASS');
 const unexecuted = results.filter((r) => !r.executed);
 const proofs = results.filter((r) => r.execution_proof);
@@ -183,7 +199,11 @@ const evidence = {
     sha: process.env.GITHUB_SHA ?? 'local',
   },
   contract: {
-    complete_test_script_surface: true,
+    complete_test_script_surface: missingSuites.length === 0 && unexpectedSuites.length === 0,
+    expected_test_scripts: expectedTestScripts,
+    discovered_test_scripts: discoveredTestScripts,
+    missing_test_scripts: missingSuites,
+    unexpected_test_scripts: unexpectedSuites,
     tests_must_execute: true,
     tests_must_pass: true,
     every_execution_requires_proof: true,
@@ -217,6 +237,8 @@ writeFileSync('reports/execution-evidence/summary.sha256', hash(canonical) + '\n
 if (
   !mockDetectionPassed ||
   suites.length === 0 ||
+  missingSuites.length > 0 ||
+  unexpectedSuites.length > 0 ||
   failed.length > 0 ||
   unexecuted.length > 0 ||
   proofs.length !== results.length ||
