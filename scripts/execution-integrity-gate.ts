@@ -105,8 +105,8 @@ function makeProof(
   };
 
   const signature = signProofPayload(unsigned as Record<string, unknown>, identity.private_key!);
+  const proofHash = sha256(canonicalize(unsigned));
   const unsignedWithSignature = { ...unsigned, signature };
-  const proofHash = sha256(canonicalize(unsignedWithSignature));
 
   return { ...unsignedWithSignature, proof_hash: proofHash };
 }
