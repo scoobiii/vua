@@ -24,8 +24,11 @@ jobs:
           node-version: 22
           cache: npm
 
+      - name: Normalize lockfile
+        run: npm install --package-lock-only --ignore-scripts --no-audit --no-fund
+
       - name: Install
-        run: npm ci
+        run: npm ci --no-audit --no-fund
 
       - name: Run execution-integrity gate
         run: npm run test:ci
