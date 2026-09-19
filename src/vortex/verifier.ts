@@ -64,7 +64,8 @@ export function verifyExecutionProof(
 
   // 2. Identity Discovery
   const keyId = proof.identity?.key_id;
-  const pubKey = resolvePublicKey(keyId, options?.embeddedPublicKey);
+  const embeddedProofKey = proof.identity?.public_key;
+  const pubKey = resolvePublicKey(keyId, embeddedProofKey || options?.embeddedPublicKey);
   if (!keyId || !pubKey) {
     checks.identity = { passed: false, message: `Could not resolve public key for key_id '${keyId}'` };
     reasons.push(`Unresolvable cryptographic identity key_id: ${keyId}`);
