@@ -26,7 +26,6 @@ jobs:
 
       - name: Normalize lockfile
         run: npm install --package-lock-only --ignore-scripts --no-audit --no-fund
-undefined
       - name: Install
         run: npm ci --no-audit --no-fund
 
