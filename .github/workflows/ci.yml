@@ -1,3 +1,9 @@
+# @gos3-contract
+# @version 1.0.0
+# @resource .github/workflows/ci.yml
+# @checksum sha256:f8296017a6e4180a4be093fc4deadf97a3cf8795bdbfba37cb0146b4c
+# @capability ci.execute
+# @governed true
 name: VUA CI — Execution Integrity
 
 on:
