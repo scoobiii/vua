@@ -30,6 +30,9 @@ jobs:
       - name: Install
         run: npm ci --no-audit --no-fund
 
+      - name: Verify lockfile is reproducible
+        run: git diff --exit-code -- package-lock.json
+
       - name: Run execution-integrity gate
         run: npm run test:ci
         env:
@@ -43,4 +46,4 @@ jobs:
           path: |
             .vortex-evidence.json
             reports/execution-evidence/**
-          if-no-files-found: ignore
+          if-no-files-found: error
