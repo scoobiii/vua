@@ -739,8 +739,10 @@ ${benchmarkSummary}`,
   });
 
   // 16. GENERATE DETERMINISTIC EVIDENCE HASH & PERSIST ARTIFACT
+  assert(collectedProofHashes.length > 0, 'Execution integrity requires at least one real ExecutionProof from the suite');
+
   const evidence = generateExecutionEvidence({
-    proofHashes: collectedProofHashes.length > 0 ? collectedProofHashes : ['sha256:dummy-proof-pass'],
+    proofHashes: collectedProofHashes,
     allTestsPassed: true,
     coveragePercent: 100,
   });
