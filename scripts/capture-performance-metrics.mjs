@@ -20,25 +20,25 @@ const architecture = process.arch === 'x64' ? 'x86_64' : process.arch;
 if (profile === 'github-vm' && process.env.GITHUB_ACTIONS !== 'true') throw new Error('github-vm capture requires GitHub Actions');
 if (profile === 'mobile' && !['arm64', 'arm'].includes(architecture)) throw new Error(`mobile capture requires ARM architecture, got ${architecture}`);
 
-const tsxCli = 'node_modules/tsx/dist/cli.mjs';
-if (!existsSync(tsxCli)) {
-  console.error(`Benchmark runner missing: ${tsxCli}`);
+const npmCommand = process.platform === 'win32' ? 'npm.cmd' : 'npm';
+if (!existsSync('node_modules/.bin/tsx')) {
+  console.error('Benchmark runner missing: node_modules/.bin/tsx');
   process.exit(1);
 }
 
-const commandArgs = ['bin/vua.js', 'bench'];
+const commandArgs = ['run', 'bench'];
 if (process.env.VUA_BENCHMARK_ARGS) {
   try {
     const extraArgs = JSON.parse(process.env.VUA_BENCHMARK_ARGS);
     if (!Array.isArray(extraArgs)) throw new Error('VUA_BENCHMARK_ARGS must be a JSON array');
-    commandArgs.push(...extraArgs);
+    commandArgs.push('--', ...extraArgs);
   } catch (error) {
     console.error(`Invalid VUA_BENCHMARK_ARGS: ${error.message}`);
     process.exit(2);
   }
 }
 
-const result = spawnSync(process.execPath, [tsxCli, ...commandArgs], {
+const result = spawnSync(npmCommand, commandArgs, {
   encoding: 'utf8',
   env: process.env,
   maxBuffer: 4 * 1024 * 1024,
@@ -51,7 +51,7 @@ if (result.error) {
 
 const log = `${result.stdout ?? ''}\n${result.stderr ?? ''}`;
 if (result.status !== 0) {
-  console.error(`Benchmark exited with code ${result.status}.`);
+  console.error(`Benchmark exited with code ${result.status ?? 'unknown'}${result.signal ? ` (signal ${result.signal})` : ''}.`);
   if (log.trim()) console.error(log.trim());
   process.exit(result.status ?? 1);
 }
@@ -63,7 +63,7 @@ function parseNumber(value) {
 function parseOfficialBench(text) {
   const total = text.match(/Total de Opera(?:ções|c)[^:]*:\s*([\d,]+)/i)?.[1];
   const duration = text.match(/Dura(?:ção|c)[^:]*:\s*([\d,.]+)\s*ms/i)?.[1];
-  const throughput = text.match(/Throughput\s*:\s*([\d,.]+)\s*(?:ops|opera(?:ções|ção|c)[^/]*)\/?seg/i)?.[1];
+  const throughput = text.match(/Throughput\s*:\s*([\d,.]+)\s*(?:ops|opera(?:ções|ção|c)[^\/]*)\/?seg/i)?.[1];
   const latency = text.match(/Lat(?:ência|encia)\s+M(?:édia|edia)\s*:\s*([\d,.]+)\s*(?:µs|us)/i)?.[1];
   const memory = text.match(/Consumo de Mem(?:ória|oria)\s*:\s*([\d,.]+)\s*MB/i)?.[1];
   if (!total || !duration || !throughput || !latency) return null;
