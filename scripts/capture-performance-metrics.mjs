@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 import { spawnSync } from 'node:child_process';
 import { writeFile } from 'node:fs/promises';
-import { existsSync } from 'node:fs';
+import { existsSync, statSync } from 'node:fs';
 
 const args = process.argv.slice(2).reduce((out, item, i, all) => {
   if (item.startsWith('--')) out[item.slice(2)] = all[i + 1]?.startsWith('--') ? true : all[i + 1];
@@ -20,36 +20,48 @@ const architecture = process.arch === 'x64' ? 'x86_64' : process.arch;
 if (profile === 'github-vm' && process.env.GITHUB_ACTIONS !== 'true') throw new Error('github-vm capture requires GitHub Actions');
 if (profile === 'mobile' && !['arm64', 'arm'].includes(architecture)) throw new Error(`mobile capture requires ARM architecture, got ${architecture}`);
 
-const npmCommand = process.platform === 'win32' ? 'npm.cmd' : 'npm';
-if (!existsSync('node_modules/.bin/tsx')) {
-  console.error('Benchmark runner missing: node_modules/.bin/tsx');
+const tsxCli = 'node_modules/tsx/dist/cli.mjs';
+if (!existsSync(tsxCli)) {
+  console.error(`Benchmark runner missing: ${tsxCli}`);
   process.exit(1);
 }
 
-const commandArgs = ['run', 'bench'];
+const commandArgs = ['bin/vua.js', 'bench'];
 if (process.env.VUA_BENCHMARK_ARGS) {
   try {
     const extraArgs = JSON.parse(process.env.VUA_BENCHMARK_ARGS);
     if (!Array.isArray(extraArgs)) throw new Error('VUA_BENCHMARK_ARGS must be a JSON array');
-    commandArgs.push('--', ...extraArgs);
+    commandArgs.push(...extraArgs);
   } catch (error) {
     console.error(`Invalid VUA_BENCHMARK_ARGS: ${error.message}`);
     process.exit(2);
   }
 }
 
-const result = spawnSync(npmCommand, commandArgs, {
+console.log(JSON.stringify({
+  status: 'BENCHMARK_PREFLIGHT',
+  node: process.version,
+  executable: process.execPath,
+  architecture,
+  profile,
+  tsx: tsxCli,
+  tsx_size: statSync(tsxCli).size,
+  command: [process.execPath, tsxCli, ...commandArgs],
+}, null, 2));
+
+const result = spawnSync(process.execPath, [tsxCli, ...commandArgs], {
   encoding: 'utf8',
   env: process.env,
   maxBuffer: 4 * 1024 * 1024,
 });
 
+const log = `${result.stdout ?? ''}\n${result.stderr ?? ''}`;
 if (result.error) {
   console.error(`Benchmark process failed to start: ${result.error.message}`);
+  console.error(log.trim());
   process.exit(1);
 }
 
-const log = `${result.stdout ?? ''}\n${result.stderr ?? ''}`;
 if (result.status !== 0) {
   console.error(`Benchmark exited with code ${result.status ?? 'unknown'}${result.signal ? ` (signal ${result.signal})` : ''}.`);
   if (log.trim()) console.error(log.trim());
