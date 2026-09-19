@@ -29,7 +29,7 @@ export interface VUAActionMetadata {
 export interface VUAAdapterMetadata {
   id: VUAAdapterId;
   name: string;
-  environment: 'Cloud VCS' | 'POSIX Linux' | 'AOSP Android' | 'Win32/NT Windows' | 'AT Protocol / Bluesky' | 'test';
+  environment: 'Cloud VCS' | 'POSIX Linux' | 'AOSP Android' | 'Android AOSP' | 'Win32/NT Windows' | 'Windows NT' | 'AT Protocol / Bluesky' | 'GCP Cloud Run / Cloud APIs' | 'test';
   version: string;
   status: VUAAdapterStatus;
   description: string;

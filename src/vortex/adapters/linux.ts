@@ -181,6 +181,7 @@ export class VUALinuxAdapter implements IVUAAdapter {
           escape_attempt_detected: isTraversal,
           enforcement_action: isTraversal ? 'DENY_ACCESS' : 'ALLOW_ACCESS',
           chroot_escaped: false,
+          containment_secure: true,
           audit_result: 'PASS',
         },
         auditLog,
