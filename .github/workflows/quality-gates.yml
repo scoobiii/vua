@@ -40,6 +40,9 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Mock detector — fail before tests and benchmark
+        run: npx tsx scripts/mock-detector.ts
+
       - name: Lint
         run: npm run lint
 
