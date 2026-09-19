@@ -1,4 +1,12 @@
 #!/usr/bin/env node
+/**
+ * @gos3-contract
+ * @version 1.0.0
+ * @resource scripts/capture-performance-metrics.mjs
+ * @checksum sha256:8342b9da4bee50e32d30ced9958ee376f2718aaa9f988ac282beb3a7c6373c31
+ * @capability performance.capture
+ * @governed true
+ */
 import { spawnSync } from 'node:child_process';
 import { writeFile } from 'node:fs/promises';
 import { existsSync, statSync } from 'node:fs';
