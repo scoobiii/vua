@@ -5,12 +5,34 @@
   "type": "module",
   "main": "./src/vortex/index.ts",
   "types": "./src/vortex/index.ts",
-  "bin": {"vua": "./bin/vua.js"},
-  "repository": {"type": "git", "url": "https://github.com/scoobiii/vua.git"},
-  "keywords": ["vortex","vua","mcp","ai-agents","governance","ed25519","rfc8785","llm","security","claude","cursor"],
+  "bin": {
+    "vua": "./bin/vua.js"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/scoobiii/vua.git"
+  },
+  "keywords": [
+    "vortex",
+    "vua",
+    "mcp",
+    "ai-agents",
+    "governance",
+    "ed25519",
+    "rfc8785",
+    "llm",
+    "security",
+    "claude",
+    "cursor"
+  ],
   "author": "Vortex Open Protocol Foundation",
   "license": "MIT",
-  "files": ["bin","src/vortex","dist","README.md"],
+  "files": [
+    "bin",
+    "src/vortex",
+    "dist",
+    "README.md"
+  ],
   "scripts": {
     "dev": "tsx server.ts",
     "build": "vite build && esbuild server.ts --bundle --platform=node --format=cjs --packages=external --sourcemap --outfile=dist/server.cjs",
@@ -19,7 +41,7 @@
     "clean": "rm -rf dist server.js",
     "lint": "tsc --noEmit",
     "test": "npm run lint && npm run test:unit && npm run test:integration && npm run test:security && npm run test:stress && npm run test:chaos && npm run test:bench && tsx scripts/run-full-suite.ts",
-    "test:ci": "npm run lint && tsx scripts/execution-integrity-gate.ts && tsx scripts/run-full-suite.ts",
+    "test:ci": "npm run lint && tsx scripts/execution-integrity-gate.ts",
     "test:unit": "tsx tests/unit.test.ts",
     "test:integration": "tsx tests/integration.test.ts",
     "test:stress": "tsx tests/stress.test.ts",
@@ -48,7 +70,8 @@
     "test:k6:soak": "tsx tests/k6/k6-runner.ts soak",
     "test:k6:chaos": "tsx tests/k6/k6-runner.ts chaos",
     "test:k6:degradation": "tsx tests/k6/k6-runner.ts degradation",
-    "build:cli": "esbuild bin/vua.js --bundle --platform=node --format=cjs --packages=external --outfile=dist/vua.cjs && chmod +x dist/vua.cjs"
+    "build:cli": "esbuild bin/vua.js --bundle --platform=node --format=cjs --packages=external --outfile=dist/vua.cjs && chmod +x dist/vua.cjs",
+    "test:full-suite": "tsx scripts/run-full-suite.ts"
   },
   "dependencies": {
     "@google-cloud/firestore": "^9.1.0",
