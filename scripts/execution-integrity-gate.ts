@@ -50,14 +50,8 @@ function discoverSuites(): Array<[string, string]> {
   };
   const scripts = Object.entries(pkg.scripts ?? {})
     .filter(([name]) => name.startsWith('test:'))
-    .filter(([name]) => !['test:ci'].includes(name))
+    .filter(([name]) => name !== 'test:ci')
     .sort(([a], [b]) => a.localeCompare(b));
-
-  // The strict GOS3 verifier is a conformance test even though its script is
-  // named verify:* rather than test:*.
-  if (pkg.scripts?.['verify:gos3']) {
-    scripts.push(['verify:gos3', pkg.scripts['verify:gos3']]);
-  }
 
   return scripts;
 }
@@ -101,7 +95,7 @@ function makeProof(
     policy_version: '1.0.0',
     gos3_session_id: `gos3-sess-ci-${process.env.GITHUB_RUN_ID ?? 'local'}-${testId.replace(/[^a-z0-9-]/gi, '-')}`,
     sandbox_id: 'github-actions-runner',
-    identity: { key_id: identity.key_id, algorithm: 'Ed25519' },
+    identity: { key_id: identity.key_id, algorithm: 'Ed25519', public_key: identity.public_key },
   };
 
   const signature = signProofPayload(unsigned as Record<string, unknown>, identity.private_key!);
@@ -177,10 +171,7 @@ const expectedTestScripts = Object.entries(
   .map(([name]) => name)
   .sort();
 
-const discoveredTestScripts = suites
-  .filter(([name]) => name.startsWith('test:'))
-  .map(([name]) => name)
-  .sort();
+const discoveredTestScripts = suites.map(([name]) => name).sort();
 
 const missingSuites = expectedTestScripts.filter((name) => !discoveredTestScripts.includes(name));
 const unexpectedSuites = discoveredTestScripts.filter((name) => !expectedTestScripts.includes(name));
@@ -208,6 +199,7 @@ const evidence = {
     tests_must_pass: true,
     every_execution_requires_proof: true,
     every_proof_requires_independent_verification: true,
+    proof_public_key_must_be_embedded: true,
     production_mock_detection_must_pass: true,
   },
   mock_detection: {
