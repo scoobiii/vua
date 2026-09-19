@@ -71,7 +71,8 @@
     "bench:k6:spike": "tsx tests/k6/k6-runner.ts spike",
     "bench:k6:soak": "tsx tests/k6/k6-runner.ts soak",
     "bench:k6:chaos": "tsx tests/k6/k6-runner.ts chaos",
-    "bench:k6:degradation": "tsx tests/k6/k6-runner.ts degradation"
+    "bench:k6:degradation": "tsx tests/k6/k6-runner.ts degradation",
+    "verify:evidence": "tsx scripts/verify-execution-evidence.ts"
   },
   "dependencies": {
     "@google-cloud/firestore": "^9.1.0",
