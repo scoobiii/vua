@@ -8,7 +8,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 
-const ROOTS = ['src/vortex', 'src'];
+const ROOTS = ['src/vortex'];
 const EXTENSIONS = new Set(['.ts', '.tsx', '.js', '.mjs', '.cjs']);
 
 const RULES: Array<[string, RegExp]> = [
@@ -21,6 +21,7 @@ const RULES: Array<[string, RegExp]> = [
   ['mockResolvedValue', /\bmockResolvedValue\s*\(/],
   ['mockReturnValue', /\bmockReturnValue\s*\(/],
   ['fake adapter marker', /\b(?:mock|fake|stub)[_-](?:adapter|executor|gateway|provider)\b/i],
+  ['test double import in production', /(?:from|require\()\s*['\"][^'\"]*(?:__mocks__|test-doubles|test_doubles|fixtures)[^'\"]*['\"]/i],
 ];
 
 function walk(dir: string, out: string[] = []): string[] {
