@@ -32,6 +32,9 @@ jobs:
       - name: Verify lockfile is reproducible
         run: git diff --exit-code -- package-lock.json
 
+      - name: Mock detector — fail before test suite
+        run: npx tsx scripts/mock-detector.ts
+
       - name: Run execution-integrity gate
         run: npm run test:ci
         env:
