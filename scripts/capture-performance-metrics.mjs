@@ -64,8 +64,8 @@ function parseOfficialBench(text) {
   const total = text.match(/Total de Opera(?:ções|c)[^:]*:\s*([\d,]+)/i)?.[1];
   const duration = text.match(/Dura(?:ção|c)[^:]*:\s*([\d,.]+)\s*ms/i)?.[1];
   const throughput = text.match(/Throughput\s*:\s*([\d,.]+)\s*(?:ops|opera(?:ções|ção|c)[^/]*)\/?seg/i)?.[1];
-  const latency = text.match(/Lat(?:ência|e)\s*M(?:édia|e)dia\s*:\s*([\d,.]+)\s*(?:µs|us)/i)?.[1];
-  const memory = text.match(/Consumo de Mem(?:ória|o)ria\s*:\s*([\d,.]+)\s*MB/i)?.[1];
+  const latency = text.match(/Lat(?:ência|encia)\s+M(?:édia|edia)\s*:\s*([\d,.]+)\s*(?:µs|us)/i)?.[1];
+  const memory = text.match(/Consumo de Mem(?:ória|oria)\s*:\s*([\d,.]+)\s*MB/i)?.[1];
   if (!total || !duration || !throughput || !latency) return null;
   return {
     profile, architecture, workload: 'local-crypto',
