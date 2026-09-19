@@ -1,3 +1,9 @@
+# @gos3-contract
+# @version 1.0.0
+# @resource .github/workflows/ci.yml
+# @checksum sha256:f8296017a6e418fc9345120a4be093c4deadf97a3cf8795bdbfba37cb0146b4c
+# @capability ci.execute
+# @governed true
 name: VUA CI — Execution Integrity
 
 on:
@@ -26,17 +32,23 @@ jobs:
 
       - name: Normalize lockfile
         run: npm install --package-lock-only --ignore-scripts --no-audit --no-fund
-
       - name: Install
         run: npm ci --no-audit --no-fund
 
       - name: Verify lockfile is reproducible
         run: git diff --exit-code -- package-lock.json
 
+      - name: Mock detector — fail before test suite
+        run: npx tsx scripts/mock-detector.ts
+
       - name: Run execution-integrity gate
         run: npm run test:ci
         env:
           CI: "true"
+
+      - name: Independently verify persisted ExecutionProof evidence
+        if: always()
+        run: npm run verify:evidence
 
       - name: Upload execution evidence
         if: always()

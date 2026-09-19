@@ -1,3 +1,9 @@
+# @gos3-contract
+# @version 1.0.0
+# @resource .github/workflows/quality-gates.yml
+# @checksum sha256:1ab8b3d62f1d7d5ea4516a504b81d22bdaf645e09494e2ca29a7170b417e6656
+# @capability ci.execute
+# @governed true
 name: quality-gates
 
 on:
@@ -40,6 +46,9 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Mock detector — fail before tests and benchmark
+        run: npx tsx scripts/mock-detector.ts
+
       - name: Lint
         run: npm run lint
 
@@ -73,12 +82,21 @@ jobs:
             --profile mobile \
             --skip-runner-profile
 
+      - name: Benchmark runtime preflight
+        run: |
+          set -euxo pipefail
+          node --version
+          npm --version
+          node -e 'console.log(JSON.stringify({node:process.version,exec:process.execPath,arch:process.arch,github_actions:process.env.GITHUB_ACTIONS,profile:process.env.RUNNER_PROFILE}, null, 2))'
+          test -f scripts/capture-performance-metrics.mjs
+          test -s node_modules/tsx/dist/cli.mjs
+          node -e 'const fs=require("fs"); console.log(JSON.stringify({capture:fs.statSync("scripts/capture-performance-metrics.mjs"),tsx:fs.statSync("node_modules/tsx/dist/cli.mjs")}, null, 2))'
+
       - name: Run contextual benchmark
         run: |
-          test -x scripts/capture-performance-metrics.mjs
-          node scripts/capture-performance-metrics.mjs \
-            --output /tmp/current-metrics.json \
-            --profile "$RUNNER_PROFILE"
+          set -euxo pipefail
+          node --trace-uncaught scripts/capture-performance-metrics.mjs --output /tmp/current-metrics.json --profile "$RUNNER_PROFILE"
+          test -s /tmp/current-metrics.json
 
       - name: Compare against verified baseline
         run: |

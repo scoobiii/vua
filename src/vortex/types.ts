@@ -119,6 +119,8 @@ export interface ExecutionProof {
   identity: {
     key_id: string;
     algorithm: 'Ed25519';
+    /** Public key bound into the signed proof for offline independent verification. */
+    public_key?: string;
   };
   signature: string; // Base64 signature of JCS(Proof without signature)
   proof_hash?: string; // Tamper-evident hash of proof
