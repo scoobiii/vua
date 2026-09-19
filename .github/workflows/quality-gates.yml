@@ -82,7 +82,7 @@ jobs:
           node --version
           npm --version
           node -e 'console.log(JSON.stringify({node:process.version,exec:process.execPath,arch:process.arch,github_actions:process.env.GITHUB_ACTIONS,profile:process.env.RUNNER_PROFILE}, null, 2))'
-          test -x scripts/capture-performance-metrics.mjs
+          test -f scripts/capture-performance-metrics.mjs
           test -s node_modules/tsx/dist/cli.mjs
           node -e 'const fs=require("fs"); console.log(JSON.stringify({capture:fs.statSync("scripts/capture-performance-metrics.mjs"),tsx:fs.statSync("node_modules/tsx/dist/cli.mjs")}, null, 2))'
 
