@@ -1,3 +1,9 @@
+# @gos3-contract
+# @version 1.0.0
+# @resource .github/workflows/quality-gates.yml
+# @checksum sha256:1ab8b3d62f1d7d5ea4516a504b81d22bdaf645e09494e2ca29a7170b417e6656
+# @capability ci.execute
+# @governed true
 name: quality-gates
 
 on:
