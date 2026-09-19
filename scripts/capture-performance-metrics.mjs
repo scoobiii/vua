@@ -3,7 +3,7 @@
  * @gos3-contract
  * @version 1.0.0
  * @resource scripts/capture-performance-metrics.mjs
- * @checksum sha256:8342b9da4bee50e32d30ced9958ee376f2718aaa9f988ac282beb3a7c6373c31
+ * @checksum sha256:e3551052bd45ef0ee646355b4c4962409f7318603fd7d93c23f68206a798cb30
  * @capability performance.capture
  * @governed true
  */
