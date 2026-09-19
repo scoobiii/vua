@@ -54,6 +54,7 @@
     "verify:gos3": "tsx scripts/verify-gos3-headers.ts --strict",
     "vua": "tsx bin/vua.js",
     "bench": "tsx bin/vua.js bench",
+    "bench:gcloud": "tsx bin/vua.js bench --cloud",
     "bench:mcp": "tsx scripts/run-mcp-benchmark.ts",
     "bench:semantic": "tsx scripts/run-semantic-benchmark.ts",
     "tao:compare": "tsx scripts/tao-compare.ts",

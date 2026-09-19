@@ -12,7 +12,7 @@
 
 import type { ExecutionProof, ExternalEffect, VerificationResult } from '../types.js';
 
-export type VUAAdapterId = 'github' | 'linux' | 'android' | 'windows' | 'bluesky' | 'canary';
+export type VUAAdapterId = 'github' | 'linux' | 'android' | 'windows' | 'bluesky' | 'canary' | 'gcloud';
 
 export type VUAAdapterStatus = 'online' | 'ready' | 'simulated' | 'degraded';
 

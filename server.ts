@@ -844,6 +844,47 @@ async function startServer() {
     }
   });
 
+  // 19.1. VUA - Google Cloud Free Tier & Comparative Benchmarker
+  app.post('/api/vua/gcloud/bench', async (req, res) => {
+    try {
+      const { iterations = 10, cloud_url } = req.body || {};
+      const result = await vuaRegistry.invoke({
+        adapterId: 'gcloud',
+        action: 'compare_bench',
+        payload: { iterations, cloud_url },
+      });
+      res.json(result);
+    } catch (err: any) {
+      res.status(500).json({ error: err.message || String(err) });
+    }
+  });
+
+  app.get('/api/vua/gcloud/free-tier', async (req, res) => {
+    try {
+      const result = await vuaRegistry.invoke({
+        adapterId: 'gcloud',
+        action: 'free_tier_limits',
+      });
+      res.json(result);
+    } catch (err: any) {
+      res.status(500).json({ error: err.message || String(err) });
+    }
+  });
+
+  app.post('/api/vua/gcloud/probe', async (req, res) => {
+    try {
+      const { url } = req.body || {};
+      const result = await vuaRegistry.invoke({
+        adapterId: 'gcloud',
+        action: 'probe_endpoint',
+        payload: { url },
+      });
+      res.json(result);
+    } catch (err: any) {
+      res.status(500).json({ error: err.message || String(err) });
+    }
+  });
+
   // 20. VUA - Run Multi-Environment Conformance Suite
   app.post('/api/vua/conformance', async (req, res) => {
     try {

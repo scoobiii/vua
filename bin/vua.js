@@ -47,7 +47,8 @@ Comandos Principais:
   vua baseline                  Gera auto-configuração de baseline dinâmica para este gadget/dev
   vua adapters                  Lista os adaptadores registrados (Linux, Android, Windows, GitHub)
   vua invoke <adapter> <action> Executa uma ação normatizada num adaptador com prova Ed25519
-  vua bench                     Roda benchmark de desempenho e latência local (ops/sec, crypto)
+  vua bench [--cloud]           Roda benchmark de desempenho local (e comparativo Cloud Run Free Tier)
+  vua gcloud <probe|bench|limits> Executa auditoria e benchmark de Google Cloud Free Tier
   vua conformance               Roda bateria de conformidade nos 4 adaptadores (100% test suite)
   vua llm [opções]              Executa prompt LLM governado (Qwen Coder local, Ollama ou Gemini)
   vua bluesky <post|thread|...> Publica posts/threads no Bluesky com prova Ed25519 (AT Protocol)
@@ -227,6 +228,18 @@ async function handleBench() {
   console.log(`   • Consumo de Memória   : ${(process.memoryUsage().rss / 1024 / 1024).toFixed(1)} MB`);
   console.log(`═════════════════════════════════════════════════════════════`);
   console.log(`✅ O motor VUA está ultra-otimizado para dispositivos ARM64 / Termux / Alpine.`);
+
+  if (args.includes('--cloud') || args.includes('--gcloud')) {
+    const cloudUrlIndex = args.indexOf('--url');
+    const cloudUrl = cloudUrlIndex !== -1 && args[cloudUrlIndex + 1] ? args[cloudUrlIndex + 1] : process.env.CLOUDRUN_URL;
+    console.log(`\n☁️  Executando Benchmark Comparativo com Google Cloud Free Tier...`);
+    const compResult = await vuaRegistry.invoke({
+      adapterId: 'gcloud',
+      action: 'compare_bench',
+      payload: { iterations: 10, cloud_url: cloudUrl },
+    });
+    console.log(JSON.stringify(compResult.data, null, 2));
+  }
 }
 
 async function handleConformance() {
@@ -593,8 +606,32 @@ async function handleAudit() {
   }
 }
 
+async function handleGcloud() {
+  printBanner();
+  const sub = args[1] || 'limits';
+  console.log(`☁️  VUA Google Cloud Free Tier Module (Ação: ${sub}):\n`);
+
+  if (sub === 'limits' || sub === 'freetier') {
+    const res = await vuaRegistry.invoke({ adapterId: 'gcloud', action: 'free_tier_limits' });
+    console.log(JSON.stringify(res.data, null, 2));
+  } else if (sub === 'probe') {
+    const url = args[2] || process.env.CLOUDRUN_URL;
+    const res = await vuaRegistry.invoke({ adapterId: 'gcloud', action: 'probe_endpoint', payload: { url } });
+    console.log(JSON.stringify(res.data, null, 2));
+  } else if (sub === 'bench') {
+    const count = parseInt(args[2], 10) || 10;
+    const res = await vuaRegistry.invoke({ adapterId: 'gcloud', action: 'compare_bench', payload: { iterations: count } });
+    console.log(JSON.stringify(res.data, null, 2));
+  } else {
+    console.log(`Subcomando desconhecido: ${sub}. Use: vua gcloud <limits|probe|bench>`);
+  }
+}
+
 // Router
 switch (command) {
+  case 'gcloud':
+    handleGcloud();
+    break;
   case 'repo':
     handleRepo();
     break;
