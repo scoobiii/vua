@@ -1,0 +1,49 @@
+name: VUA CI — Execution Integrity
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  execution-integrity:
+    name: Tests + execution evidence + mock gate
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Normalize lockfile
+        run: npm install --package-lock-only --ignore-scripts --no-audit --no-fund
+
+      - name: Install
+        run: npm ci --no-audit --no-fund
+
+      - name: Verify lockfile is reproducible
+        run: git diff --exit-code -- package-lock.json
+
+      - name: Run execution-integrity gate
+        run: npm run test:ci
+        env:
+          CI: "true"
+
+      - name: Upload execution evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: vua-execution-evidence
+          path: |
+            .vortex-evidence.json
+            reports/execution-evidence/**
+          if-no-files-found: error
