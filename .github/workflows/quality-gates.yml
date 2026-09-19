@@ -76,9 +76,7 @@ jobs:
       - name: Run contextual benchmark
         run: |
           test -x scripts/capture-performance-metrics.mjs
-          node scripts/capture-performance-metrics.mjs \
-            --output /tmp/current-metrics.json \
-            --profile "$RUNNER_PROFILE"
+          node scripts/capture-performance-metrics.mjs --output /tmp/current-metrics.json --profile "$RUNNER_PROFILE"
 
       - name: Compare against verified baseline
         run: |
