@@ -38,6 +38,10 @@ jobs:
         env:
           CI: "true"
 
+      - name: Independently verify persisted ExecutionProof evidence
+        if: always()
+        run: npm run verify:evidence
+
       - name: Upload execution evidence
         if: always()
         uses: actions/upload-artifact@v4
