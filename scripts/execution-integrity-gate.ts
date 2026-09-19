@@ -1,14 +1,13 @@
 /**
  * VUA CI execution-integrity gate.
  *
- * Contract:
- * - every registered test command must actually execute;
- * - command exit status must be zero;
- * - output must not contain explicit mock/stub/bypass markers;
- * - an evidence record is persisted for every executed command.
+ * The gate separates two different controls:
+ * 1. Mock Detection: static inspection of production execution code.
+ * 2. Test execution evidence: every required suite must actually run and exit 0.
  *
- * This is deliberately independent from a conventional green test summary:
- * CI is green only when the execution contract is satisfied.
+ * We deliberately do NOT grep test stdout for words such as "mock", "simulate",
+ * or "fixture": legitimate security/chaos tests use those terms and that creates
+ * false positives. Mock governance belongs in the static detector.
  */
 
 import { spawnSync } from 'node:child_process';
@@ -25,7 +24,6 @@ type CommandResult = {
   executed: boolean;
   stdout_hash: string;
   stderr_hash: string;
-  mock_markers: string[];
   status: 'PASS' | 'FAIL';
 };
 
@@ -36,18 +34,9 @@ const commands = [
   ['chaos', 'npm run test:chaos'],
   ['security', 'npm run test:security'],
   ['bench', 'npm run test:bench'],
+  ['policy', 'npm run test:policy'],
+  ['threads', 'npm run test:threads'],
 ] as const;
-
-// Intentionally conservative: these are governance/test doubles that must never
-// silently become the evidence behind a conformance result.
-const MOCK_MARKERS = [
-  /\\bmock\\b/i,
-  /\\bstub\\b/i,
-  /\\bfixture\\b/i,
-  /\\bfake\\b/i,
-  /\\bbypass\\b/i,
-  /\\bsimulat(?:e|ed|ion)\\b/i,
-];
 
 function sha256(text: string): string {
   return 'sha256:' + createHash('sha256').update(text, 'utf8').digest('hex');
@@ -65,18 +54,7 @@ function run(testId: string, command: string): CommandResult {
 
   const stdout = result.stdout ?? '';
   const stderr = result.stderr ?? '';
-  const combined = stdout + '\n' + stderr;
-  const mockMarkers = MOCK_MARKERS
-    .filter((pattern) => pattern.test(combined))
-    .map((pattern) => pattern.source);
-
   const executed = result.error === undefined;
-  const status =
-    executed &&
-    result.status === 0 &&
-    mockMarkers.length === 0
-      ? 'PASS'
-      : 'FAIL';
 
   return {
     test_id: testId,
@@ -88,20 +66,26 @@ function run(testId: string, command: string): CommandResult {
     executed,
     stdout_hash: sha256(stdout),
     stderr_hash: sha256(stderr),
-    mock_markers: mockMarkers,
-    status,
+    status: executed && result.status === 0 ? 'PASS' : 'FAIL',
   };
 }
 
 mkdirSync('reports/execution-evidence', { recursive: true });
 
+const detector = spawnSync('npx tsx scripts/mock-detector.ts', {
+  shell: true,
+  encoding: 'utf8',
+  env: process.env,
+  maxBuffer: 20 * 1024 * 1024,
+});
+
 const results = commands.map(([id, command]) => run(id, command));
 const failed = results.filter((r) => r.status !== 'PASS');
 const unexecuted = results.filter((r) => !r.executed);
-const mockHits = results.filter((r) => r.mock_markers.length > 0);
+const mockDetectionPassed = detector.error === undefined && detector.status === 0;
 
 const evidence = {
-  schema: 'vua.execution-integrity.v1',
+  schema: 'vua.execution-integrity.v2',
   generated_at: new Date().toISOString(),
   ci: {
     run_id: process.env.GITHUB_RUN_ID ?? 'local',
@@ -111,7 +95,15 @@ const evidence = {
   contract: {
     tests_must_execute: true,
     tests_must_pass: true,
-    mocks_forbidden_in_execution_output: true,
+    production_mock_detection_must_pass: true,
+    stdout_keyword_scan: false,
+  },
+  mock_detection: {
+    executed: detector.error === undefined,
+    exit_code: detector.status,
+    status: mockDetectionPassed ? 'PASS' : 'FAIL',
+    stdout_hash: sha256(detector.stdout ?? ''),
+    stderr_hash: sha256(detector.stderr ?? ''),
   },
   summary: {
     discovered: results.length,
@@ -119,16 +111,16 @@ const evidence = {
     passed: results.filter((r) => r.status === 'PASS').length,
     failed: failed.length,
     unexecuted: unexecuted.length,
-    mock_hits: mockHits.length,
+    mock_hits: mockDetectionPassed ? 0 : 1,
   },
   results,
 };
 
 const canonical = JSON.stringify(evidence);
-writeFileSync('reports/execution-evidence/summary.json', JSON.stringify(evidence, null, 2));
+writeFileSync('reports/execution-evidence/summary.json', JSON.stringify(evidence, null, 2) + '\n');
 writeFileSync('reports/execution-evidence/summary.sha256', sha256(canonical) + '\n');
 
-if (failed.length > 0 || unexecuted.length > 0 || mockHits.length > 0) {
+if (!mockDetectionPassed || failed.length > 0 || unexecuted.length > 0) {
   console.error(JSON.stringify(evidence, null, 2));
   process.exit(1);
 }
