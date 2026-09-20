@@ -12,7 +12,8 @@ export type VortexOperation =
   | 'propose'
   | 'verify'
   | 'execute'
-  | 'branch.write';
+  | 'branch.write'
+  | 'publish';
 
 export type VortexStatus =
   | 'AUTHORIZED'
