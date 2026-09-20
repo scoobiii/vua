@@ -305,8 +305,14 @@ def policy_denies_unapproved_mutation(u):
             const authContext = {
               principal_id: 'scoobiii',
               agent_id: 'vortex-agent',
-              policy_id: 'vortex-dev',
+              policy_id: 'vortex-development',
+              policy_version: '1.0.0',
               capability: v.ts_cap,
+              scope: {
+                repositories: ['scoobiii/vortex', '*'],
+                branches: ['feat/*', 'fix/*', 'main'],
+                paths: ['*'],
+              },
             };
             const target = { repository: 'scoobiii/vortex', branch: v.ts_branch || 'feat/vua' };
             const tsEval = evaluatePolicy(v.ts_op, target, authContext, approvalToken);
@@ -471,7 +477,13 @@ def main() -> IO(Unit):
             principal_id: 'scoobiii',
             agent_id: 'vortex-agent',
             policy_id: 'vortex-development',
+            policy_version: '1.0.0',
             capability: v.ts_cap,
+            scope: {
+              repositories: ['scoobiii/vortex', '*'],
+              branches: ['feat/*', 'fix/*'],
+              paths: ['src/*', '*'],
+            },
           };
           const target = {
             repository: 'scoobiii/vortex',
