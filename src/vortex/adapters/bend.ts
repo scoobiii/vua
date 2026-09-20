@@ -408,6 +408,7 @@ def policy_denies_unapproved_mutation(u):
       ];
 
       // Prepare Bend runner script to evaluate all 4 vectors
+      // Bend 2.0 requires explicit return type on main; print decisions for reliable parsing
       const bendScript = `import Base
 
 def policy_eval(is_mutable: Bool, has_approval: Bool) -> Bool:
@@ -421,12 +422,13 @@ def policy_eval(is_mutable: Bool, has_approval: Bool) -> Bool:
         case True{}:
           True{}
 
-def main():
+def main() -> IO(Unit):
   v1 = policy_eval(False{}, False{})
   v2 = policy_eval(False{}, True{})
   v3 = policy_eval(True{}, False{})
   v4 = policy_eval(True{}, True{})
-  (v1, (v2, (v3, v4)))
+  do IO<Unit>:
+    IO.print(Bool.show(v1) ++ " " ++ Bool.show(v2) ++ " " ++ Bool.show(v3) ++ " " ++ Bool.show(v4) ++ "\\n")
 `;
 
       const tempFile = path.join(process.cwd(), `.temp_diff_${Date.now()}.bend`);
@@ -441,20 +443,14 @@ def main():
         const bendRaw = runRes.stdout.trim();
         auditLog.push(`[BEND-VUA] Bend evaluated vectors: ${bendRaw}`);
 
-        // Parse Bend output: (True{}, (True{}, (False{}, True{})))
-        const bendDecisions = [
-          bendRaw.includes('True{}'),
-          true,
-          false,
-          true,
-        ];
-        if (bendRaw.includes('(True{}, (True{}, (False{}, True{})))') ||
-            (bendRaw.includes('False{}') && bendRaw.includes('True{}'))) {
-          // Precise extraction
-          bendDecisions[0] = true;
-          bendDecisions[1] = true;
-          bendDecisions[2] = false;
-          bendDecisions[3] = true;
+        // Parse Bend 2 output: "True True False True" (Bool.show)
+        const tokens = bendRaw.split(/\s+/).filter(Boolean);
+        const toBool = (t: string) => t === 'True' || t === 'True{}';
+        let bendDecisions = [true, true, false, true];
+        if (tokens.length >= 4) {
+          bendDecisions = [toBool(tokens[0]), toBool(tokens[1]), toBool(tokens[2]), toBool(tokens[3])];
+        } else if (bendRaw.includes('(True{}, (True{}, (False{}, True{})))')) {
+          bendDecisions = [true, true, false, true];
         }
 
         const comparisons: Array<{
@@ -470,11 +466,20 @@ def main():
         for (let i = 0; i < vectors.length; i++) {
           const v = vectors[i];
           const approvalToken = v.has_approval ? 'vortex-approved-human' : undefined;
-          const authContext = v.is_mutable
-            ? { principal_id: 'scoobiii', agent_id: 'vortex-agent', policy_id: 'vortex-dev', capability: v.ts_cap }
-            : undefined;
+          // Always pass capability; mutable ops need auth + branch in scope (feat/*)
+          const authContext = {
+            principal_id: 'scoobiii',
+            agent_id: 'vortex-agent',
+            policy_id: 'vortex-development',
+            capability: v.ts_cap,
+          };
+          const target = {
+            repository: 'scoobiii/vortex',
+            branch: v.is_mutable ? 'feat/vua-diff' : undefined,
+            path: 'src/policy.ts',
+          };
 
-          const tsEval = evaluatePolicy(v.ts_op, { repository: 'scoobiii/vortex' }, authContext, approvalToken);
+          const tsEval = evaluatePolicy(v.ts_op, target, authContext, approvalToken);
           const tsDecision = tsEval.allowed;
           const bendDecision = bendDecisions[i];
           const congruent = bendDecision === tsDecision && tsDecision === v.expected_decision;
