@@ -21,6 +21,7 @@ import { VUAAndroidAdapter } from './android.js';
 import { VUAWindowsAdapter } from './windows.js';
 import { VUABlueskyAdapter } from './bluesky.js';
 import { VUAGCloudAdapter } from './gcloud.js';
+import { VUABendAdapter } from './bend.js';
 
 function validateApproval(
   approval: ApprovalClaims,
@@ -115,6 +116,7 @@ class VUAAdapterRegistry {
     this.register(new VUAWindowsAdapter());
     this.register(new VUABlueskyAdapter());
     this.register(new VUAGCloudAdapter());
+    this.register(new VUABendAdapter());
     this.register(new CanaryAdapter());
   }
 

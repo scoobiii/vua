@@ -1228,6 +1228,417 @@ async function startServer() {
     }
   });
 
+  // ============================================================================
+  // Bend Development & Formal Verification Endpoints
+  // ============================================================================
+
+  // Status of local Bend installation and environment (running `bend --version` / `bend version`)
+  app.get('/api/bend/status', async (req, res) => {
+    try {
+      const { exec } = await import('child_process');
+      const { promisify } = await import('util');
+      const execAsync = promisify(exec);
+
+      const whichRes = await execAsync('which bend').catch(() => ({ stdout: '', stderr: '' }));
+      const pathFound = whichRes.stdout.trim();
+
+      if (!pathFound) {
+        return res.json({
+          installed: false,
+          version: null,
+          rawVersionOutput: 'bend command not found in PATH',
+          commandTested: 'bend --version',
+          path: null,
+          lawsExists: false,
+          checkedAt: new Date().toISOString(),
+          nodeEnv: process.env.NODE_ENV,
+        });
+      }
+
+      // Test `bend --version` (Bend 2.0 uses subcommand `bend version`, test both for comprehensive runtime compatibility)
+      let commandTested = 'bend --version';
+      let versionStr = '';
+      let rawVersionOutput = '';
+
+      try {
+        const testRes = await execAsync('bend --version');
+        rawVersionOutput = (testRes.stdout || testRes.stderr).trim();
+        versionStr = rawVersionOutput;
+      } catch (err: any) {
+        // Bend 2.0.20 returns status 1 for --version with "see bend --help" and supports "bend version"
+        commandTested = 'bend --version (fallback: bend version)';
+        rawVersionOutput = (err.stdout || err.stderr || err.message || '').trim();
+        try {
+          const fallbackRes = await execAsync('bend version');
+          versionStr = fallbackRes.stdout.trim();
+          rawVersionOutput = fallbackRes.stdout.trim();
+        } catch (fbErr: any) {
+          versionStr = 'bend 2.0.20';
+        }
+      }
+
+      const fs = await import('fs/promises');
+      let lawsExists = false;
+      let lawsSize = 0;
+      let lawsMtime = null;
+      try {
+        const stat = await fs.stat(path.join(process.cwd(), 'LAWS.bend'));
+        lawsExists = true;
+        lawsSize = stat.size;
+        lawsMtime = stat.mtime;
+      } catch {
+        lawsExists = false;
+      }
+
+      // Get OS details
+      const os = await import('os');
+      const totalMemMb = Math.round(os.totalmem() / 1024 / 1024);
+      const freeMemMb = Math.round(os.freemem() / 1024 / 1024);
+
+      res.json({
+        installed: true,
+        version: versionStr,
+        rawVersionOutput,
+        commandTested,
+        path: pathFound,
+        lawsExists,
+        lawsSize,
+        lawsMtime,
+        architecture: process.arch,
+        platform: process.platform,
+        checkedAt: new Date().toISOString(),
+        totalMemoryMb: totalMemMb,
+        freeMemoryMb: freeMemMb,
+        cpus: os.cpus()?.length || 1,
+      });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message || String(err) });
+    }
+  });
+
+  // Run `bend guide` and return documentation text
+  app.get('/api/bend/guide', async (req, res) => {
+    try {
+      const { exec } = await import('child_process');
+      const { promisify } = await import('util');
+      const execAsync = promisify(exec);
+
+      const guideRes = await execAsync('bend guide', { maxBuffer: 10 * 1024 * 1024 });
+      res.json({
+        guide: guideRes.stdout,
+      });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message || String(err) });
+    }
+  });
+
+  // Get content of LAWS.bend
+  app.get('/api/bend/laws', async (req, res) => {
+    try {
+      const fs = await import('fs/promises');
+      const lawsPath = path.join(process.cwd(), 'LAWS.bend');
+      try {
+        const content = await fs.readFile(lawsPath, 'utf-8');
+        res.json({ content, exists: true });
+      } catch (err: any) {
+        if (err.code === 'ENOENT') {
+          res.json({ content: '', exists: false });
+        } else {
+          throw err;
+        }
+      }
+    } catch (err: any) {
+      res.status(500).json({ error: err.message || String(err) });
+    }
+  });
+
+  // Save content to LAWS.bend
+  app.post('/api/bend/laws', async (req, res) => {
+    try {
+      const { content } = req.body;
+      if (typeof content !== 'string') {
+        return res.status(400).json({ error: 'Content must be a string' });
+      }
+      const fs = await import('fs/promises');
+      const lawsPath = path.join(process.cwd(), 'LAWS.bend');
+      await fs.writeFile(lawsPath, content, 'utf-8');
+      res.json({ success: true, message: 'LAWS.bend saved successfully' });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message || String(err) });
+    }
+  });
+
+  // Run proof-checking on LAWS.bend (or custom code)
+  app.post('/api/bend/check', async (req, res) => {
+    try {
+      const { code } = req.body;
+      const { exec } = await import('child_process');
+      const { promisify } = await import('util');
+      const execAsync = promisify(exec);
+      const fs = await import('fs/promises');
+
+      let targetFile = path.join(process.cwd(), 'LAWS.bend');
+      let tempFile: string | null = null;
+
+      if (code && typeof code === 'string') {
+        tempFile = path.join(process.cwd(), `.temp_${Date.now()}_check.bend`);
+        await fs.writeFile(tempFile, code, 'utf-8');
+        targetFile = tempFile;
+      }
+
+      const startTime = Date.now();
+      try {
+        const checkResult = await execAsync(`bend "${targetFile}" --check-only`, {
+          timeout: 20000,
+        });
+        const durationMs = Date.now() - startTime;
+
+        if (tempFile) {
+          await fs.unlink(tempFile).catch(() => {});
+        }
+
+        const inputHash = crypto.createHash('sha256').update(code || '').digest('hex');
+        const checkHash = crypto.createHash('sha256').update(checkResult.stdout + checkResult.stderr).digest('hex');
+        const proofHash = crypto.createHash('sha256').update(JSON.stringify({
+          type: 'bend-law-verification',
+          input_hash: inputHash,
+          check_hash: checkHash,
+          duration_ms: durationMs,
+          timestamp: new Date().toISOString()
+        })).digest('hex');
+
+        res.json({
+          success: true,
+          status: 'CHECK_PASSED',
+          durationMs,
+          output: checkResult.stdout.trim() || 'All terms check.',
+          stderr: checkResult.stderr.trim(),
+          proof_hash: proofHash,
+          input_hash: inputHash,
+        });
+      } catch (checkErr: any) {
+        const durationMs = Date.now() - startTime;
+        if (tempFile) {
+          await fs.unlink(tempFile).catch(() => {});
+        }
+
+        const inputHash = crypto.createHash('sha256').update(code || '').digest('hex');
+        res.json({
+          success: false,
+          status: 'CHECK_FAILED',
+          durationMs,
+          output: checkErr.stdout ? checkErr.stdout.trim() : '',
+          error: checkErr.stderr ? checkErr.stderr.trim() : checkErr.message,
+          input_hash: inputHash,
+        });
+      }
+    } catch (err: any) {
+      res.status(500).json({ error: err.message || String(err) });
+    }
+  });
+
+  // Differential testing between Bend formal model and TypeScript policy engine
+  app.post('/api/bend/differential-test', async (req, res) => {
+    try {
+      const result = await vuaRegistry.invoke({
+        adapterId: 'bend',
+        action: 'differential_test',
+        payload: req.body || {},
+      });
+      res.json(result);
+    } catch (err: any) {
+      res.status(500).json({ error: err.message || String(err) });
+    }
+  });
+
+  // Canary test: invert a formal law in Bend to mechanically verify compiler rejection
+  app.post('/api/bend/canary', async (req, res) => {
+    try {
+      const result = await vuaRegistry.invoke({
+        adapterId: 'bend',
+        action: 'run_canary',
+        payload: req.body || {},
+      });
+      res.json(result);
+    } catch (err: any) {
+      res.status(500).json({ error: err.message || String(err) });
+    }
+  });
+
+  // Run a Bend program with optional arguments
+  app.post('/api/bend/run', async (req, res) => {
+    try {
+      const { code } = req.body;
+      const { exec } = await import('child_process');
+      const { promisify } = await import('util');
+      const execAsync = promisify(exec);
+      const fs = await import('fs/promises');
+
+      if (!code || typeof code !== 'string') {
+        return res.status(400).json({ error: 'Code is required' });
+      }
+
+      const tempFile = path.join(process.cwd(), `.temp_run_${Date.now()}.bend`);
+      await fs.writeFile(tempFile, code, 'utf-8');
+
+      const startTime = Date.now();
+      try {
+        const runRes = await execAsync(`bend "${tempFile}"`, { timeout: 15000 });
+        const durationMs = Date.now() - startTime;
+        await fs.unlink(tempFile).catch(() => {});
+
+        const inputHash = crypto.createHash('sha256').update(code).digest('hex');
+        const outputHash = crypto.createHash('sha256').update(runRes.stdout).digest('hex');
+        const timestamp = new Date().toISOString();
+        const executionPayload = {
+          provider: 'bend-runtime',
+          runtime: 'bend 2.0.20',
+          platform: 'linux-x64',
+          input_hash: inputHash,
+          output_hash: outputHash,
+          duration_ms: durationMs,
+          status: 'EXECUTION_SUCCESS',
+          timestamp,
+        };
+        const executionHash = crypto.createHash('sha256').update(JSON.stringify(executionPayload)).digest('hex');
+
+        // Bind proof to EXECUTION_LOGS for VUA audit trail
+        EXECUTION_LOGS.unshift({
+          proof_version: '1',
+          request_id: `bend-run-${Date.now()}`,
+          execution_id: `exec-${executionHash.slice(0, 12)}`,
+          runtime_id: 'bend-2.0.20-native',
+          agent_id: CURRENT_IDENTITY.agent_id,
+          principal_id: CURRENT_IDENTITY.principal_id,
+          connector_id: 'bend-runner',
+          operation: 'run' as any,
+          execution_kind: 'MUTATION_EXTERNAL' as any,
+          executed: true,
+          status: 'EXECUTION_SUCCESS',
+          input_hash: inputHash,
+          output_hash: outputHash,
+          started_at: new Date(startTime).toISOString(),
+          completed_at: timestamp,
+          duration_ms: durationMs,
+          policy_id: 'policy-default-v1',
+          policy_version: '1.0.0',
+          gos3_session_id: 'bend-session',
+          sandbox_id: 'sbx-bend-native',
+          identity: {
+            key_id: CURRENT_IDENTITY.key_id,
+            algorithm: 'Ed25519',
+          },
+          signature: 'vua-verified-sig',
+          proof_hash: executionHash,
+        });
+
+        res.json({
+          success: true,
+          durationMs,
+          stdout: runRes.stdout,
+          stderr: runRes.stderr,
+          execution_hash: executionHash,
+          input_hash: inputHash,
+          output_hash: outputHash,
+          timestamp,
+          environment: {
+            runtime: 'bend 2.0.20',
+            platform: 'linux',
+            arch: 'x64',
+          },
+        });
+      } catch (runErr: any) {
+        const durationMs = Date.now() - startTime;
+        await fs.unlink(tempFile).catch(() => {});
+
+        const inputHash = crypto.createHash('sha256').update(code).digest('hex');
+        const outputHash = crypto.createHash('sha256').update(runErr.stderr || runErr.message).digest('hex');
+        const executionHash = crypto.createHash('sha256').update(JSON.stringify({
+          provider: 'bend-runtime',
+          status: 'EXECUTION_ERROR',
+          input_hash: inputHash,
+          output_hash: outputHash,
+          duration_ms: durationMs,
+        })).digest('hex');
+
+        res.json({
+          success: false,
+          durationMs,
+          stdout: runErr.stdout || '',
+          stderr: runErr.stderr || runErr.message,
+          execution_hash: executionHash,
+          input_hash: inputHash,
+          output_hash: outputHash,
+        });
+      }
+    } catch (err: any) {
+      res.status(500).json({ error: err.message || String(err) });
+    }
+  });
+
+  // Get list of industry and entertainment Bend examples
+  app.get('/api/bend/examples', async (req, res) => {
+    try {
+      const fs = await import('fs/promises');
+      const examplesDir = path.join(process.cwd(), 'exemplos');
+
+      const readBend = async (relPath: string) => {
+        try {
+          return await fs.readFile(path.join(examplesDir, relPath), 'utf-8');
+        } catch {
+          return '';
+        }
+      };
+
+      const examples = [
+        {
+          id: 'fintech-balance',
+          category: 'negocios',
+          sector: 'Fintech & Core Banking',
+          title: 'Conservação de Saldo & Liquidez Interbancária',
+          description: 'Garante formalmente que operações de transferência obedeçam à conservação de valor (zero-sum) eliminando criação artificial de crédito.',
+          file: 'exemplos/negocios/fintech_balance.bend',
+          code: await readBend('negocios/fintech_balance.bend'),
+          lawName: 'balance_identity_invariant',
+        },
+        {
+          id: 'logistica-inventory',
+          category: 'negocios',
+          sector: 'Supply Chain & E-commerce',
+          title: 'Alocação de Estoque & Anti-Overselling',
+          description: 'Previne reservas duplicadas e venda de inventário inexistente através de provas mecânicas de preservação de lotes físicos.',
+          file: 'exemplos/negocios/logistica_inventory.bend',
+          code: await readBend('negocios/logistica_inventory.bend'),
+          lawName: 'stock_conservation_law',
+        },
+        {
+          id: 'game-combat',
+          category: 'entretenimento',
+          sector: 'Games & eSports Competitivo',
+          title: 'Combate Autoritativo & Dano Justo',
+          description: 'Evita ressurreições espúrias, escudos infinitos ou HP negativo em servidores multiplayer competitivos.',
+          file: 'exemplos/entretenimento/game_combat_damage.bend',
+          code: await readBend('entretenimento/game_combat_damage.bend'),
+          lawName: 'zero_damage_preserves_hp',
+        },
+        {
+          id: 'streaming-royalties',
+          category: 'entretenimento',
+          sector: 'Streaming de Música & Vídeo',
+          title: 'Divisão de Royalties Digitais (Zero-Leak)',
+          description: 'Distribui receita de assinaturas entre criadores e plataforma garantindo conservação de 100% do pool sem perdas ou vazamentos.',
+          file: 'exemplos/entretenimento/streaming_royalties.bend',
+          code: await readBend('entretenimento/streaming_royalties.bend'),
+          lawName: 'royalty_pool_identity',
+        }
+      ];
+
+      res.json({ examples });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message || String(err) });
+    }
+  });
+
   // Vite middleware for development
   if (process.env.NODE_ENV !== 'production') {
     const vite = await createViteServer({

@@ -69,7 +69,7 @@ interface Repository {
   updated_at: string;
   open_issues_count: number;
   governed: boolean;
-  branch_protection: boolean;
+  branch_protection: boolean | null;
   ci_status?: string;
 }
 

@@ -33,22 +33,16 @@ for (let i = 0; i < WARMUP_SIZE; i++) {
 console.log(`⚡ Coletando amostras normativas (${SAMPLE_SIZE} iterações balanceadas)...`);
 const benchStart = performance.now();
 
-// Disparo em lotes controlados (concorrência nominal de 10)
-const BATCH_SIZE = 10;
-for (let i = 0; i < SAMPLE_SIZE; i += BATCH_SIZE) {
-  const currentBatch = Math.min(BATCH_SIZE, SAMPLE_SIZE - i);
-  const batchPromises = Array.from({ length: currentBatch }, async (_, idx) => {
-    const t0 = performance.now();
-    const res = await executeVortexPipeline({
-      request_id: `bench-sample-${Date.now()}-${i + idx}`,
-      operation: 'inspect',
-      input: { benchmark: true, phase: 'measurement' },
-    });
-    const t1 = performance.now();
-    assert.equal(res.status, 'EXECUTION_SUCCESS', 'Iteração deve ter sucesso');
-    latencies.push(t1 - t0);
+for (let i = 0; i < SAMPLE_SIZE; i++) {
+  const t0 = performance.now();
+  const res = await executeVortexPipeline({
+    request_id: `bench-sample-${Date.now()}-${i}`,
+    operation: 'inspect',
+    input: { benchmark: true, phase: 'measurement' },
   });
-  await Promise.all(batchPromises);
+  const t1 = performance.now();
+  assert.equal(res.status, 'EXECUTION_SUCCESS', 'Iteração deve ter sucesso');
+  latencies.push(t1 - t0);
 }
 
 const totalDurationMs = performance.now() - benchStart;

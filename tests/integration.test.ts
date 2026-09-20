@@ -17,6 +17,7 @@ import { runVUAAdaptersE2ESuite } from '../src/vortex/conformance.js';
 import { executeGovernedLLM } from '../src/vortex/llm.js';
 import { runCanaryTests } from '../scripts/test-canary.js';
 import { createGOS3Session, onboardResource, revokeGOS3Session, validateGOS3Session } from '../src/vortex/gos3.js';
+import { runAuditedMockDetectorSuite } from '../src/vortex/mock-detector.js';
 
 console.log('🧪 Iniciando Suíte de Testes de Integração VUA (100% Cobertura)...');
 console.log('═════════════════════════════════════════════════════════════════');
@@ -132,6 +133,17 @@ await runTest('7. VUA Adapters Matrix: Sondagem de adaptadores e conformidade de
     assert.ok(Array.isArray(meta.supportedActions), 'Adaptador deve declarar array de ações suportadas');
     assert.ok(meta.supportedActions.length > 0, 'Adaptador deve prover ao menos 1 ação suportada');
   }
+});
+
+// 8. Mock Detector Gate: Zero Mocks com Prova de Execução
+await runTest('8. Mock Detector: Zero mocks sintéticos com prova de execução Ed25519 verificada', async () => {
+  const auditSuite = await runAuditedMockDetectorSuite();
+  assert.equal(auditSuite.passed, true, 'Suíte de detecção de mocks deve ser 100% aprovada');
+  assert.equal(auditSuite.mocks_detected, 0, 'Zero mocks detectados em todo o repositório e adaptadores');
+  assert.equal(auditSuite.status, 'ZERO_MOCK_VERIFIED_PASS', 'Status deve ser ZERO_MOCK_VERIFIED_PASS');
+  assert.ok(auditSuite.execution_proof, 'Deve emitir ExecutionProof v1 assinada');
+  assert.equal(auditSuite.execution_proof.executed, true, 'Flag executed deve ser true');
+  assert.equal(auditSuite.verification.valid, true, 'Prova deve ser criptograficamente verificada pelo auditor independente');
 });
 
 console.log('═════════════════════════════════════════════════════════════════');

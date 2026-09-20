@@ -253,7 +253,7 @@ export class VUAGitHubAdapter implements IVUAAdapter {
             visibility: 'public',
             branch_protection: {
               status: 'FIXTURE_SANDBOX',
-              enforced: false,
+              enforced: null,
               reason: 'Explicit offline test fixture requested',
             },
             open_issues_count: 0,
@@ -325,7 +325,7 @@ export class VUAGitHubAdapter implements IVUAAdapter {
 
         // Check real branch protection if token has permissions
         let branchProtection: Record<string, unknown> = {
-          enforced: false,
+          enforced: null,
           status: 'UNINSPECTED',
           reason: effectiveToken ? 'Inspection requires repository admin permissions' : 'Unauthenticated inspection cannot query branch protection',
         };

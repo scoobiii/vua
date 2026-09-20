@@ -77,6 +77,7 @@ export const Header: React.FC<HeaderProps> = ({
 
   const navItems = [
     { id: 'vua-adapters', label: 'Adaptadores VUA', icon: Layers },
+    { id: 'bend-dev', label: 'Bend Development', icon: Sparkles },
     { id: 'firebase-ledger', label: 'Firebase Cloud Ledger', icon: Database },
     { id: 'capability-matrix', label: 'Matriz de Capacidades (100)', icon: Sparkles },
     { id: 'semantic-oracle', label: 'Oráculo Semântico (30 Casos)', icon: Brain },
