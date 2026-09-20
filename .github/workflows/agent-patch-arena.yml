@@ -36,6 +36,7 @@ jobs:
         with:
           ref: ${{ github.event.pull_request.head.sha || github.ref }}
           fetch-depth: 0
+          persist-credentials: false
 
       - name: Setup Node.js 22 LTS
         uses: actions/setup-node@v4
@@ -47,10 +48,37 @@ jobs:
         run: npm ci || npm install
 
       # 1. Enforce Universal CI Subjection Rule (No bypass allowed)
+      # INC-2026-09-20-ARENA-CI-DECOUPLING
       - name: Verify Universal CI Subjection Invariant
-        run: |
-          echo "🛡️ Enforcing VUA-SPEC-v2 Universal CI Subjection Clause..."
-          echo "All proposers (autonomous agents, human developers, bot integrations) are strictly subject to CI gates."
+        id: ci_subjection
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const requiredPrefixes = [
+              'Lint, tests, build and attested performance gate',
+              'Conformance, 100% Quality Gates',
+              'Tests + execution evidence + mock gate',
+            ];
+            const sha = context.payload.pull_request?.head?.sha || context.sha;
+            const { data } = await github.rest.checks.listForRef({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              ref: sha,
+              per_page: 100,
+            });
+            const notGreen = [];
+            for (const prefix of requiredPrefixes) {
+              const matches = data.check_runs.filter(c => c.name.startsWith(prefix) || c.name.includes(prefix));
+              const ok = matches.some(c => c.status === 'completed' && c.conclusion === 'success');
+              if (!ok) notGreen.push(prefix);
+            }
+            if (notGreen.length > 0) {
+              core.warning('Universal CI Subjection: blocked — ' + notGreen.join('; '));
+              core.setOutput('blocked', 'true');
+            } else {
+              core.info('All required gates green.');
+              core.setOutput('blocked', 'false');
+            }
 
       # 2. Derive Changed Files for Trusted Intent Classification
       - name: Derive Changed Files from Base
@@ -93,14 +121,16 @@ jobs:
       - name: Evaluate Merge Decision Gate
         id: merge_gate
         run: |
-          if grep -E -q "PASS_SUPERIOR|PASS_SECURITY|PASS_GOVERNANCE|PASS_CORRECTNESS" arena_output.txt; then
+          set -euo pipefail
+          if grep -E -q "PASS_SUPERIOR|PASS_SECURITY|PASS_GOVERNANCE|PASS_CORRECTNESS" arena_output.txt \
+             && [ "${{ steps.ci_subjection.outputs.blocked }}" != "true" ]; then
             echo "superior_found=true" >> "$GITHUB_OUTPUT"
             echo "approved=true" >> "$GITHUB_OUTPUT"
-            echo "✅ Patch achieved intent-approved verdict in Arena."
+            echo "✅ Arena PASS and CI subjection not blocked."
           else
             echo "superior_found=false" >> "$GITHUB_OUTPUT"
             echo "approved=false" >> "$GITHUB_OUTPUT"
-            echo "⚠️ No patch achieved approved verdict (regression, manual review or disqualified). Auto-merge forbidden."
+            echo "⚠️ Auto-merge forbidden: Arena and/or CI subjection."
             exit 1
           fi
 
@@ -123,16 +153,18 @@ jobs:
               body: body
             });
 
-      # 9. Fast-forward Auto-Merge (Only if approved & auto_merge_winner is enabled)
-      - name: Fast-Forward Auto-Merge Approved Winner
-        if: ${{ steps.merge_gate.outputs.superior_found == 'true' && (inputs.auto_merge_winner == true || contains(github.event.pull_request.labels.*.name, 'automerge-superior')) }}
+      # 9. Protected path only (INC-2026-09-20: no git push origin main)
+      - name: Auto-Merge Approved Winner (via protected path)
+        if: ${{ steps.merge_gate.outputs.superior_found == 'true' && steps.ci_subjection.outputs.blocked != 'true' && (inputs.auto_merge_winner == true || contains(github.event.pull_request.labels.*.name, 'automerge-superior')) }}
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          echo "🚀 Executing auto-merge for verified candidate..."
-          git config user.name "vortex-ci-robot[bot]"
-          git config user.email "ci-robot@vortex-foundation.org"
-          git checkout main
-          git merge --ff-only "${{ github.head_ref }}"
-          git push origin main
+          set -euo pipefail
+          echo "🚀 Protected auto-merge only (no git push origin main)"
+          gh pr merge "${{ github.event.pull_request.number }}" \
+            --repo "${{ github.repository }}" \
+            --auto --squash \
+            --match-head-commit "${{ github.event.pull_request.head.sha }}"
 
       # 10. Archive Verifiable Tournament Evidence
       - name: Archive Arena Cryptographic Evidence
