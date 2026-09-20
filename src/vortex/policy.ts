@@ -204,7 +204,7 @@ export function evaluatePolicy(
   if (
     policy.prohibited_operations.includes(operation) ||
     policy.prohibited_operations.includes(auth.capability) ||
-    (operation === 'publish' && policy.prohibited_operations.some((p) => p.includes('publish')))
+    (operation === ('publish' as VortexOperation) && policy.prohibited_operations.some((p) => p.includes('publish')))
   ) {
     return {
       allowed: false,
