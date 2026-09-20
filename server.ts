@@ -1290,6 +1290,16 @@ async function startServer() {
         lawsExists = false;
       }
 
+      let vuaGovernanceExists = false;
+      let vuaGovernanceSize = 0;
+      try {
+        const statGov = await fs.stat(path.join(process.cwd(), 'vua_governance.bend'));
+        vuaGovernanceExists = true;
+        vuaGovernanceSize = statGov.size;
+      } catch {
+        vuaGovernanceExists = false;
+      }
+
       // Get OS details
       const os = await import('os');
       const totalMemMb = Math.round(os.totalmem() / 1024 / 1024);
@@ -1304,6 +1314,8 @@ async function startServer() {
         lawsExists,
         lawsSize,
         lawsMtime,
+        vuaGovernanceExists,
+        vuaGovernanceSize,
         architecture: process.arch,
         platform: process.platform,
         checkedAt: new Date().toISOString(),
@@ -1332,17 +1344,18 @@ async function startServer() {
     }
   });
 
-  // Get content of LAWS.bend
+  // Get content of LAWS.bend or vua_governance.bend
   app.get('/api/bend/laws', async (req, res) => {
     try {
+      const targetFile = req.query.file === 'vua_governance.bend' ? 'vua_governance.bend' : 'LAWS.bend';
       const fs = await import('fs/promises');
-      const lawsPath = path.join(process.cwd(), 'LAWS.bend');
+      const lawsPath = path.join(process.cwd(), targetFile);
       try {
         const content = await fs.readFile(lawsPath, 'utf-8');
-        res.json({ content, exists: true });
+        res.json({ content, exists: true, file: targetFile });
       } catch (err: any) {
         if (err.code === 'ENOENT') {
-          res.json({ content: '', exists: false });
+          res.json({ content: '', exists: false, file: targetFile });
         } else {
           throw err;
         }
@@ -1352,17 +1365,18 @@ async function startServer() {
     }
   });
 
-  // Save content to LAWS.bend
+  // Save content to LAWS.bend or vua_governance.bend
   app.post('/api/bend/laws', async (req, res) => {
     try {
-      const { content } = req.body;
+      const { content, file } = req.body;
       if (typeof content !== 'string') {
         return res.status(400).json({ error: 'Content must be a string' });
       }
+      const targetFile = file === 'vua_governance.bend' ? 'vua_governance.bend' : 'LAWS.bend';
       const fs = await import('fs/promises');
-      const lawsPath = path.join(process.cwd(), 'LAWS.bend');
+      const lawsPath = path.join(process.cwd(), targetFile);
       await fs.writeFile(lawsPath, content, 'utf-8');
-      res.json({ success: true, message: 'LAWS.bend saved successfully' });
+      res.json({ success: true, message: `${targetFile} saved successfully`, file: targetFile });
     } catch (err: any) {
       res.status(500).json({ error: err.message || String(err) });
     }
@@ -1371,13 +1385,14 @@ async function startServer() {
   // Run proof-checking on LAWS.bend (or custom code)
   app.post('/api/bend/check', async (req, res) => {
     try {
-      const { code } = req.body;
+      const { code, file } = req.body;
       const { exec } = await import('child_process');
       const { promisify } = await import('util');
       const execAsync = promisify(exec);
       const fs = await import('fs/promises');
 
-      let targetFile = path.join(process.cwd(), 'LAWS.bend');
+      const reqFile = file === 'vua_governance.bend' ? 'vua_governance.bend' : 'LAWS.bend';
+      let targetFile = path.join(process.cwd(), reqFile);
       let tempFile: string | null = null;
 
       if (code && typeof code === 'string') {

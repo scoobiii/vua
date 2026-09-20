@@ -1,0 +1,7 @@
+{
+  "schema": "vua.mock-detection.v1",
+  "scanned_files": 33,
+  "findings": [],
+  "mock_count": 0,
+  "status": "PASS"
+}

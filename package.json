@@ -50,6 +50,7 @@
     "test:caos": "tsx tests/chaos.test.ts",
     "test:bench": "tsx tests/performance-bench.test.ts",
     "test:policy": "tsx tests/patch-arena-policy.test.ts",
+    "test:diff": "tsx tests/vua-governance-differential.test.ts",
     "test:arena": "tsx scripts/agent-patch-arena.ts",
     "test:threads": "tsx scripts/test-threads.ts",
     "verify:gos3": "tsx scripts/verify-gos3-headers.ts --strict",

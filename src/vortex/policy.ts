@@ -201,6 +201,20 @@ export function evaluatePolicy(
   }
 
   // Check prohibited operations (e.g. merge main, publish)
+  if (
+    policy.prohibited_operations.includes(operation) ||
+    policy.prohibited_operations.includes(auth.capability) ||
+    (operation === 'publish' && policy.prohibited_operations.some((p) => p.includes('publish')))
+  ) {
+    return {
+      allowed: false,
+      status: 'POLICY_DENIED',
+      requires_approval: false,
+      is_approved: false,
+      reason: `Operation '${operation}' with capability '${auth.capability}' is strictly prohibited by policy`,
+    };
+  }
+
   if (target?.branch === 'main' || target?.branch === 'master') {
     if (operation === 'branch.write' || auth.capability === 'repository.merge') {
       return {
@@ -228,6 +242,17 @@ export function evaluatePolicy(
       requires_approval: false,
       is_approved: false,
       reason: `Capability '${auth.capability}' is not granted in policy '${policy.id}'`,
+    };
+  }
+
+  // Enforce side_effect constraint: read-only capability cannot authorize mutating operations
+  if ((operation === 'branch.write' || operation === 'execute') && matchingCap.side_effect === false) {
+    return {
+      allowed: false,
+      status: 'POLICY_DENIED',
+      requires_approval: false,
+      is_approved: false,
+      reason: `Operation '${operation}' requires a mutating capability, but capability '${auth.capability}' is read-only (side_effect: false)`,
     };
   }
 
