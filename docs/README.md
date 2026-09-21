@@ -37,6 +37,7 @@ Esses números caracterizam o ambiente de teste ARM64/Alpine; não são SLA univ
 | [09. Baseline](./governance/BASELINE-TOLERANCE-REPORT.md) | baseline dinâmica |
 | [Product Status](./PRODUCT-STATUS-2026-09-17.md) | produto, mercados, evidências e gates de release |
 | [Linux Native CLI Status](./LINUX-NATIVE-CLI-STATUS.md) | limites atuais da integração Linux |
+| [Bend × VUA × GOS3](./BEND-VUA-GOS3-MCP-THREAD.md) | 10 vetores de governança, contrato MCP e evidência |
 | [Produtos por Indústria](./VUA-PRODUTOS-SERVICOS-POR-INDUSTRIA.md) | aplicações e modelos de oferta |
 
 ## CLI
