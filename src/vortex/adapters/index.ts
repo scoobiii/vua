@@ -6,3 +6,4 @@ export * from './android.js';
 export * from './windows.js';
 export * from './bluesky.js';
 export * from './gcloud.js';
+export * from './web-scraper.js';
