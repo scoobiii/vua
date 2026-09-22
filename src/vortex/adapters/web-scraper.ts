@@ -24,7 +24,7 @@ export interface WebScrapeRecord {
 }
 
 function clean(value: string): string {
-  return value.replace(/\\s+/g, ' ').trim();
+  return value.replace(/\s+/g, ' ').trim();
 }
 
 function decodeEntities(value: string): string {
@@ -40,9 +40,9 @@ function decodeEntities(value: string): string {
 function stripTags(html: string): string {
   return decodeEntities(
     html
-      .replace(/<script[\\s\\S]*?<\\/script>/gi, ' ')
-      .replace(/<style[\\s\\S]*?<\\/style>/gi, ' ')
-      .replace(/<noscript[\\s\\S]*?<\\/noscript>/gi, ' ')
+      .replace(/<script[\s\S]*?<\/script>/gi, ' ')
+      .replace(/<style[\s\S]*?<\/style>/gi, ' ')
+      .replace(/<noscript[\s\S]*?<\/noscript>/gi, ' ')
       .replace(/<[^>]+>/g, ' ')
   );
 }
@@ -155,17 +155,17 @@ export class VUAWebScraperAdapter implements IVUAAdapter {
     }
 
     const html = body;
-    const title = firstMatch(html, /<title[^>]*>([\\s\\S]*?)<\\/title>/i);
+    const title = firstMatch(html, /<title[^>]*>([\s\S]*?)<\/title>/i);
     const description = firstMatch(html, /<meta[^>]+name=["']description["'][^>]+content=["']([^"']*)["'][^>]*>/i)
       ?? firstMatch(html, /<meta[^>]+content=["']([^"']*)["'][^>]+name=["']description["'][^>]*>/i);
     const language = firstMatch(html, /<html[^>]+lang=["']([^"']+)["']/i);
     const canonical = firstMatch(html, /<link[^>]+rel=["']canonical["'][^>]+href=["']([^"']+)["'][^>]*>/i);
     const author = firstMatch(html, /<meta[^>]+name=["']author["'][^>]+content=["']([^"']*)["'][^>]*>/i);
     const publishedAt = firstMatch(html, /<meta[^>]+(?:property|name)=["'](?:article:published_time|date|pubdate)["'][^>]+content=["']([^"']*)["'][^>]*>/i);
-    const headings = allMatches(html, /<h[1-6][^>]*>([\\s\\S]*?)<\\/h[1-6]>/gi).map(clean).filter(Boolean).slice(0, 100);
+    const headings = allMatches(html, /<h[1-6][^>]*>([\s\S]*?)<\/h[1-6]>/gi).map(clean).filter(Boolean).slice(0, 100);
 
     const links: Array<{ text: string; url: string }> = [];
-    const linkRe = /<a[^>]+href=["']([^"']+)["'][^>]*>([\\s\\S]*?)<\\/a>/gi;
+    const linkRe = /<a[^>]+href=["']([^"']+)["'][^>]*>([\s\S]*?)<\/a>/gi;
     let linkMatch: RegExpExecArray | null;
     while ((linkMatch = linkRe.exec(html)) !== null && links.length < 200) {
       const href = resolveUrl(linkMatch[1], url);
@@ -174,11 +174,11 @@ export class VUAWebScraperAdapter implements IVUAAdapter {
     }
 
     const plainText = clean(stripTags(html));
-    const emails = [...new Set((plainText.match(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\\.[A-Z]{2,}/gi) ?? []))];
-    const phones = [...new Set((plainText.match(/(?:\\+?55[\\s.-]?)?(?:\\(?\\d{2}\\)?[\\s.-]?)?\\d{4,5}[\\s.-]?\\d{4}/g) ?? []))];
+    const emails = [...new Set((plainText.match(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/gi) ?? []))];
+    const phones = [...new Set((plainText.match(/(?:\+?55[\s.-]?)?(?:\(?\d{2}\)?[\s.-]?)?\d{4,5}[\s.-]?\d{4}/g) ?? []))];
 
     const structuredData: unknown[] = [];
-    for (const raw of allMatches(html, /<script[^>]+type=["']application\\/ld\\+json["'][^>]*>([\\s\\S]*?)<\\/script>/gi).slice(0, 20)) {
+    for (const raw of allMatches(html, /<script[^>]+type=["']application\/ld\+json["'][^>]*>([\s\S]*?)<\/script>/gi).slice(0, 20)) {
       try { structuredData.push(JSON.parse(raw)); } catch { /* preserve only valid JSON-LD */ }
     }
 
